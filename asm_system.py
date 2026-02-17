@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-"""Core Attack Surface Management (ASM) system.
+"""Attack Surface Management (ASM) core system.
 
-This module provides a lightweight yet extensible ASM implementation that can:
-- register assets and exposed services
-- register vulnerabilities associated with assets/services
-- calculate risk scores at asset and environment levels
-- produce an actionable remediation backlog
-- persist and load state as JSON
+This module provides data models and orchestration logic to:
+- register and update assets
+- ingest service/vulnerability scan data
+- calculate risk scores
+- generate remediation backlog
+- persist/reload ASM state as JSON
 """
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 import json
@@ -64,9 +64,7 @@ class Vulnerability:
     remediated: bool = False
 
     def risk_points(self, exposure_level: ExposureLevel) -> float:
-        base = SEVERITY_WEIGHT[self.severity]
-        multiplier = EXPOSURE_MULTIPLIER[exposure_level]
-        return round(base * multiplier, 2)
+        return round(SEVERITY_WEIGHT[self.severity] * EXPOSURE_MULTIPLIER[exposure_level], 2)
 
 
 @dataclass
@@ -76,16 +74,29 @@ class Asset:
     owner: str
     business_criticality: int = 3
     exposure_level: ExposureLevel = ExposureLevel.INTERNAL
+    tags: List[str] = field(default_factory=list)
     services: List[Service] = field(default_factory=list)
     vulnerabilities: List[Vulnerability] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        if not 1 <= self.business_criticality <= 5:
+            raise ValueError("business_criticality must be between 1 and 5")
+
     def add_service(self, service: Service) -> None:
-        if any(s.port == service.port and s.protocol == service.protocol for s in self.services):
+        key = (service.port, service.protocol.lower())
+        if any((s.port, s.protocol.lower()) == key for s in self.services):
             raise ValueError(f"Service on port {service.port}/{service.protocol} already exists for {self.asset_id}")
         self.services.append(service)
 
     def add_vulnerability(self, vulnerability: Vulnerability) -> None:
-        self.vulnerabilities.append(vulnerability)
+        duplicate = any(
+            v.title == vulnerability.title
+            and v.affected_service == vulnerability.affected_service
+            and not v.remediated
+            for v in self.vulnerabilities
+        )
+        if not duplicate:
+            self.vulnerabilities.append(vulnerability)
 
     def open_vulnerabilities(self) -> List[Vulnerability]:
         return [v for v in self.vulnerabilities if not v.remediated]
@@ -106,11 +117,16 @@ class AttackSurfaceManagementSystem:
             raise ValueError(f"Asset {asset.asset_id} already registered")
         self.assets[asset.asset_id] = asset
 
+    def delete_asset(self, asset_id: str) -> bool:
+        return self.assets.pop(asset_id, None) is not None
+
     def get_asset(self, asset_id: str) -> Asset:
-        try:
-            return self.assets[asset_id]
-        except KeyError as exc:
-            raise KeyError(f"Asset {asset_id} not found") from exc
+        if asset_id not in self.assets:
+            raise KeyError(f"Asset {asset_id} not found")
+        return self.assets[asset_id]
+
+    def list_assets(self) -> List[Asset]:
+        return sorted(self.assets.values(), key=lambda a: a.asset_id)
 
     def ingest_scan_result(
         self,
@@ -123,9 +139,7 @@ class AttackSurfaceManagementSystem:
             try:
                 asset.add_service(service)
             except ValueError:
-                # Duplicate service, ignore as scanner can report historical entries.
                 pass
-
         for vulnerability in vulnerabilities or []:
             asset.add_vulnerability(vulnerability)
 
@@ -139,6 +153,19 @@ class AttackSurfaceManagementSystem:
 
     def environment_risk_score(self) -> float:
         return round(sum(asset.risk_score() for asset in self.assets.values()), 2)
+
+    def exposure_summary(self) -> Dict[str, int]:
+        summary = {level.value: 0 for level in ExposureLevel}
+        for asset in self.assets.values():
+            summary[asset.exposure_level.value] += 1
+        return summary
+
+    def severity_summary(self) -> Dict[str, int]:
+        summary = {severity.value: 0 for severity in Severity}
+        for asset in self.assets.values():
+            for vuln in asset.open_vulnerabilities():
+                summary[vuln.severity.value] += 1
+        return summary
 
     def remediation_backlog(self) -> List[dict]:
         backlog = []
@@ -154,9 +181,9 @@ class AttackSurfaceManagementSystem:
                         "risk_points": vuln.risk_points(asset.exposure_level),
                         "exposure": asset.exposure_level.value,
                         "service": vuln.affected_service,
+                        "discovered_at": vuln.discovered_at,
                     }
                 )
-
         backlog.sort(
             key=lambda item: (
                 item["risk_points"],
@@ -165,6 +192,16 @@ class AttackSurfaceManagementSystem:
             reverse=True,
         )
         return backlog
+
+    def dashboard(self) -> dict:
+        return {
+            "asset_count": len(self.assets),
+            "environment_risk": self.environment_risk_score(),
+            "open_vulnerabilities": sum(len(a.open_vulnerabilities()) for a in self.assets.values()),
+            "exposure_summary": self.exposure_summary(),
+            "severity_summary": self.severity_summary(),
+            "top_risks": self.remediation_backlog()[:10],
+        }
 
     def to_dict(self) -> dict:
         return {
@@ -181,7 +218,7 @@ class AttackSurfaceManagementSystem:
                         for v in asset.vulnerabilities
                     ],
                 }
-                for asset in self.assets.values()
+                for asset in self.list_assets()
             ]
         }
 
@@ -195,14 +232,10 @@ class AttackSurfaceManagementSystem:
                 owner=raw_asset["owner"],
                 business_criticality=raw_asset.get("business_criticality", 3),
                 exposure_level=ExposureLevel(raw_asset.get("exposure_level", "internal")),
+                tags=raw_asset.get("tags", []),
                 services=[Service(**service) for service in raw_asset.get("services", [])],
                 vulnerabilities=[
-                    Vulnerability(
-                        **{
-                            **vuln,
-                            "severity": Severity(vuln["severity"]),
-                        }
-                    )
+                    Vulnerability(**{**vuln, "severity": Severity(vuln["severity"])})
                     for vuln in raw_asset.get("vulnerabilities", [])
                 ],
             )
@@ -210,7 +243,9 @@ class AttackSurfaceManagementSystem:
         return asm
 
     def save(self, path: str | Path) -> None:
-        Path(path).write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
 
     @classmethod
     def load(cls, path: str | Path) -> "AttackSurfaceManagementSystem":
@@ -218,41 +253,67 @@ class AttackSurfaceManagementSystem:
         return cls.from_dict(payload)
 
 
-if __name__ == "__main__":
+def seed_demo_environment() -> AttackSurfaceManagementSystem:
     asm = AttackSurfaceManagementSystem()
     asm.register_asset(
         Asset(
             asset_id="asset-001",
-            hostname="portal.texas-college.edu",
+            hostname="portal.texascollege.edu",
             owner="IT Security",
             business_criticality=5,
             exposure_level=ExposureLevel.PUBLIC,
+            tags=["student", "production", "web"],
         )
     )
+    asm.register_asset(
+        Asset(
+            asset_id="asset-002",
+            hostname="erp.internal.texascollege.edu",
+            owner="Enterprise Apps",
+            business_criticality=4,
+            exposure_level=ExposureLevel.INTERNAL,
+            tags=["erp", "finance"],
+        )
+    )
+
     asm.ingest_scan_result(
         "asset-001",
         services=[
             Service(name="https", port=443, internet_exposed=True),
-            Service(name="ssh", port=22, internet_exposed=False),
+            Service(name="ssh", port=22),
         ],
         vulnerabilities=[
             Vulnerability(
                 title="Outdated OpenSSL",
                 severity=Severity.HIGH,
-                description="OpenSSL version is vulnerable to known RCE exploit chain.",
+                description="OpenSSL version vulnerable to RCE chain.",
                 cve="CVE-2023-5678",
                 affected_service="https",
             ),
             Vulnerability(
                 title="Weak SSH Ciphers",
                 severity=Severity.MEDIUM,
-                description="Server supports deprecated SSH ciphers.",
+                description="Deprecated ciphers enabled.",
                 affected_service="ssh",
             ),
         ],
     )
 
-    print("Environment risk score:", asm.environment_risk_score())
-    print("Remediation backlog:")
-    for item in asm.remediation_backlog():
-        print(f"- [{item['severity'].upper()}] {item['asset_id']} :: {item['vulnerability']} ({item['risk_points']} pts)")
+    asm.ingest_scan_result(
+        "asset-002",
+        services=[Service(name="mssql", port=1433)],
+        vulnerabilities=[
+            Vulnerability(
+                title="Missing Security Patches",
+                severity=Severity.CRITICAL,
+                description="OS patch level behind security baseline.",
+            )
+        ],
+    )
+
+    return asm
+
+
+if __name__ == "__main__":
+    demo = seed_demo_environment()
+    print(json.dumps(demo.dashboard(), indent=2))

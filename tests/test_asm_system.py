@@ -5,19 +5,21 @@ from asm_system import (
     Service,
     Severity,
     Vulnerability,
+    seed_demo_environment,
 )
 
 
 def test_register_and_score_asset():
     asm = AttackSurfaceManagementSystem()
-    asset = Asset(
-        asset_id="asset-01",
-        hostname="app.local",
-        owner="SecOps",
-        business_criticality=4,
-        exposure_level=ExposureLevel.PUBLIC,
+    asm.register_asset(
+        Asset(
+            asset_id="asset-01",
+            hostname="app.local",
+            owner="SecOps",
+            business_criticality=4,
+            exposure_level=ExposureLevel.PUBLIC,
+        )
     )
-    asm.register_asset(asset)
 
     asm.ingest_scan_result(
         "asset-01",
@@ -33,8 +35,7 @@ def test_register_and_score_asset():
 
 def test_remediation_reduces_risk():
     asm = AttackSurfaceManagementSystem()
-    asset = Asset(asset_id="a1", hostname="db.local", owner="DBA")
-    asm.register_asset(asset)
+    asm.register_asset(Asset(asset_id="a1", hostname="db.local", owner="DBA"))
     asm.ingest_scan_result(
         "a1",
         vulnerabilities=[
@@ -50,12 +51,8 @@ def test_remediation_reduces_risk():
 
 def test_remediation_backlog_sorted_by_risk_points():
     asm = AttackSurfaceManagementSystem()
-    asm.register_asset(
-        Asset(asset_id="public", hostname="site", owner="web", exposure_level=ExposureLevel.PUBLIC)
-    )
-    asm.register_asset(
-        Asset(asset_id="internal", hostname="intra", owner="it", exposure_level=ExposureLevel.INTERNAL)
-    )
+    asm.register_asset(Asset(asset_id="public", hostname="site", owner="web", exposure_level=ExposureLevel.PUBLIC))
+    asm.register_asset(Asset(asset_id="internal", hostname="intra", owner="it", exposure_level=ExposureLevel.INTERNAL))
 
     asm.ingest_scan_result(
         "public",
@@ -73,10 +70,41 @@ def test_remediation_backlog_sorted_by_risk_points():
 
 def test_save_and_load_roundtrip(tmp_path):
     asm = AttackSurfaceManagementSystem()
-    asm.register_asset(Asset(asset_id="a", hostname="a.local", owner="team"))
+    asm.register_asset(Asset(asset_id="a", hostname="a.local", owner="team", tags=["core"]))
 
     output = tmp_path / "asm.json"
     asm.save(output)
 
     loaded = AttackSurfaceManagementSystem.load(output)
     assert loaded.get_asset("a").hostname == "a.local"
+    assert loaded.get_asset("a").tags == ["core"]
+
+
+def test_dashboard_contains_expected_keys():
+    asm = seed_demo_environment()
+    dashboard = asm.dashboard()
+
+    assert dashboard["asset_count"] == 2
+    assert "severity_summary" in dashboard
+    assert "top_risks" in dashboard
+
+
+def test_duplicate_service_is_ignored_during_ingest():
+    asm = AttackSurfaceManagementSystem()
+    asm.register_asset(Asset(asset_id="dup", hostname="dup.local", owner="Ops"))
+
+    asm.ingest_scan_result("dup", services=[Service(name="https", port=443)])
+    asm.ingest_scan_result("dup", services=[Service(name="https", port=443)])
+
+    assert len(asm.get_asset("dup").services) == 1
+
+
+def test_duplicate_open_vulnerability_not_added_twice():
+    asm = AttackSurfaceManagementSystem()
+    asm.register_asset(Asset(asset_id="vdup", hostname="vdup.local", owner="Ops"))
+
+    vuln = Vulnerability(title="TLS Weak", severity=Severity.MEDIUM, description="desc", affected_service="https")
+    asm.ingest_scan_result("vdup", vulnerabilities=[vuln])
+    asm.ingest_scan_result("vdup", vulnerabilities=[vuln])
+
+    assert len(asm.get_asset("vdup").open_vulnerabilities()) == 1

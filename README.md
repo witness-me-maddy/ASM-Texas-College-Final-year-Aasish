@@ -1,64 +1,70 @@
 # ASM-Texas-College-Final-year-Aasish
 
-Attack Surface Management (ASM) system for discovering, tracking, and prioritizing risks across digital assets.
+A complete **Attack Surface Management (ASM)** project for inventorying assets, ingesting findings, calculating risk, and prioritizing remediation.
 
-## Features
+## What is implemented
 
-- Asset inventory management (hostname, owner, exposure, business criticality).
-- Exposed service tracking (port/protocol/internet exposure).
-- Vulnerability intake from scan results.
-- Risk scoring model based on severity, exposure level, and asset criticality.
-- Prioritized remediation backlog generation.
-- JSON persistence (`save`/`load`) for reporting and handoff.
+- ✅ Asset registry with owners, exposure level, criticality, and tags.
+- ✅ Service inventory (protocol/port and internet exposure).
+- ✅ Vulnerability ingestion and duplicate control.
+- ✅ Risk scoring based on severity × exposure × business criticality.
+- ✅ Environment dashboard summary and prioritized remediation backlog.
+- ✅ JSON persistence and restore (`save` / `load`).
+- ✅ CLI for real usage (`init-demo`, `dashboard`, `add-asset`, `add-vuln`, `remediate`).
+- ✅ Automated tests and GitHub Actions CI.
 
-## Project Structure
+## Repository structure
 
-- `asm_system.py` – core ASM domain model and orchestration.
-- `tests/test_asm_system.py` – automated tests for scoring, remediation, sorting, and persistence.
+- `asm_system.py` — core ASM engine and domain model.
+- `asm_cli.py` — command-line interface for daily operations.
+- `tests/test_asm_system.py` — test suite.
+- `.github/workflows/ci.yml` — CI pipeline for GitHub.
+- `requirements.txt` — Python dependencies.
 
-## Quick Start
+## Quick start
 
 ```bash
-python asm_system.py
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-Expected output includes environment risk score and a prioritized remediation backlog.
+Initialize demo data:
 
-## Run Tests
+```bash
+python asm_cli.py init-demo
+```
+
+Show current dashboard:
+
+```bash
+python asm_cli.py dashboard
+```
+
+Add an asset:
+
+```bash
+python asm_cli.py add-asset asset-300 api.texascollege.edu "AppSec Team" --business-criticality 5 --exposure-level public --tags api production
+```
+
+Add a vulnerability:
+
+```bash
+python asm_cli.py add-vuln asset-300 "Verbose Error Disclosure" "Stack traces exposed in production" --severity medium --service https
+```
+
+Remediate:
+
+```bash
+python asm_cli.py remediate asset-300 "Verbose Error Disclosure"
+```
+
+## Run tests
 
 ```bash
 python -m pytest -q
 ```
 
-## Example Integration
+## GitHub setup
 
-```python
-from asm_system import AttackSurfaceManagementSystem, Asset, Service, Vulnerability, ExposureLevel, Severity
-
-asm = AttackSurfaceManagementSystem()
-asm.register_asset(
-    Asset(
-        asset_id="asset-001",
-        hostname="student-portal.texascollege.edu",
-        owner="IT Security",
-        business_criticality=5,
-        exposure_level=ExposureLevel.PUBLIC,
-    )
-)
-
-asm.ingest_scan_result(
-    "asset-001",
-    services=[Service(name="https", port=443, internet_exposed=True)],
-    vulnerabilities=[
-        Vulnerability(
-            title="Outdated OpenSSL",
-            severity=Severity.HIGH,
-            description="Patched version required",
-            cve="CVE-2023-5678",
-        )
-    ],
-)
-
-print(asm.environment_risk_score())
-print(asm.remediation_backlog())
-```
+Push this repository to GitHub and CI will automatically run tests on push and pull requests via `.github/workflows/ci.yml`.
