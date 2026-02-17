@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-
 from asm_system import (
     Asset,
     AttackSurfaceManagementSystem,
@@ -75,19 +74,40 @@ def cmd_remediate(args: argparse.Namespace) -> None:
         print(f"No open vulnerability named '{args.title}' found on {args.asset_id}")
 
 
+def add_db_option(subparser: argparse.ArgumentParser) -> None:
+    subparser.add_argument("--db", type=Path, default=Path("data/asm_state.json"), help="Path to ASM JSON state file")
+
+
+def cmd_list_assets(args: argparse.Namespace) -> None:
+    asm = load_or_new(args.db)
+    for asset in asm.list_assets():
+        print(f"{asset.asset_id} | {asset.hostname} | owner={asset.owner} | exposure={asset.exposure_level.value} | risk={asset.risk_score()}")
+
+
+def cmd_export_backlog(args: argparse.Namespace) -> None:
+    asm = load_or_new(args.db)
+    backlog = asm.remediation_backlog()
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(backlog, indent=2), encoding="utf-8")
+    print(f"Backlog exported to {output}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Attack Surface Management CLI")
-    parser.add_argument("--db", type=Path, default=Path("data/asm_state.json"), help="Path to ASM JSON state file")
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     init_demo = subparsers.add_parser("init-demo", help="Create demo ASM dataset")
+    add_db_option(init_demo)
     init_demo.set_defaults(func=cmd_init_demo)
 
     dashboard = subparsers.add_parser("dashboard", help="Print dashboard summary")
+    add_db_option(dashboard)
     dashboard.set_defaults(func=cmd_dashboard)
 
     add_asset = subparsers.add_parser("add-asset", help="Register a new asset")
+    add_db_option(add_asset)
     add_asset.add_argument("asset_id")
     add_asset.add_argument("hostname")
     add_asset.add_argument("owner")
@@ -97,6 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_asset.set_defaults(func=cmd_add_asset)
 
     add_vuln = subparsers.add_parser("add-vuln", help="Attach vulnerability to an asset")
+    add_db_option(add_vuln)
     add_vuln.add_argument("asset_id")
     add_vuln.add_argument("title")
     add_vuln.add_argument("description")
@@ -106,9 +127,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_vuln.set_defaults(func=cmd_add_vuln)
 
     remediate = subparsers.add_parser("remediate", help="Mark vulnerability as remediated")
+    add_db_option(remediate)
     remediate.add_argument("asset_id")
     remediate.add_argument("title")
     remediate.set_defaults(func=cmd_remediate)
+
+    list_assets = subparsers.add_parser("list-assets", help="List assets with point-in-time risk")
+    add_db_option(list_assets)
+    list_assets.set_defaults(func=cmd_list_assets)
+
+    export_backlog = subparsers.add_parser("export-backlog", help="Export remediation backlog to JSON")
+    add_db_option(export_backlog)
+    export_backlog.add_argument("--output", default="data/backlog.json")
+    export_backlog.set_defaults(func=cmd_export_backlog)
 
     return parser
 
