@@ -1,5 +1,19 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.venv/
-data/*.json
+```
+# Dependencies
+node_modules/
+
+# Editor/IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Environment
+.env
+.env.local
+*.env.*
+```
