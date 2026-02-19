@@ -1,78 +1,3 @@
-// Mock data for demonstration - in a real application, this would come from an API
-const mockDashboardData = {
-    asset_count: 156,
-    environment_risk: 245.7,
-    open_vulnerabilities: 89,
-    exposure_summary: {
-        internal: 98,
-        partner: 32,
-        public: 26
-    },
-    severity_summary: {
-        low: 12,
-        medium: 34,
-        high: 31,
-        critical: 12
-    },
-    top_risks: [
-        {
-            asset_id: "asset-001",
-            hostname: "portal.texascollege.edu",
-            vulnerability: "Outdated OpenSSL",
-            severity: "high",
-            risk_points: 10.8,
-            owner: "IT Security",
-            exposure: "public",
-            service: "https",
-            discovered_at: "2023-06-15T10:30:00+00:00"
-        },
-        {
-            asset_id: "asset-002",
-            hostname: "erp.internal.texascollege.edu",
-            vulnerability: "Missing Security Patches",
-            severity: "critical",
-            risk_points: 13.0,
-            owner: "Enterprise Apps",
-            exposure: "internal",
-            service: null,
-            discovered_at: "2023-06-10T14:22:00+00:00"
-        },
-        {
-            asset_id: "asset-003",
-            hostname: "api.customer.texascollege.edu",
-            vulnerability: "SQL Injection Vulnerability",
-            severity: "critical",
-            risk_points: 12.6,
-            owner: "Dev Team A",
-            exposure: "public",
-            service: "https",
-            discovered_at: "2023-06-18T09:15:00+00:00"
-        },
-        {
-            asset_id: "asset-004",
-            hostname: "intranet.partner.texascollege.edu",
-            vulnerability: "Weak Authentication",
-            severity: "high",
-            risk_points: 9.2,
-            owner: "Partner Services",
-            exposure: "partner",
-            service: "https",
-            discovered_at: "2023-06-12T16:45:00+00:00"
-        },
-        {
-            asset_id: "asset-005",
-            hostname: "backup.internal.texascollege.edu",
-            vulnerability: "Unencrypted Data Transfer",
-            severity: "medium",
-            risk_points: 4.2,
-            owner: "IT Operations",
-            exposure: "internal",
-            service: "ftp",
-            discovered_at: "2023-06-14T11:30:00+00:00"
-        }
-    ]
-};
-
 // Function to get severity color
 function getSeverityColor(severity) {
     switch(severity) {
@@ -247,20 +172,55 @@ function populateTopRisksTable(topRisks) {
     });
 }
 
+// Function to fetch dashboard data from API
+async function fetchDashboardData() {
+    try {
+        const response = await fetch('/api/dashboard');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        return data;
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        // Fallback to mock data if API fails
+        return {
+            asset_count: 0,
+            environment_risk: 0,
+            open_vulnerabilities: 0,
+            exposure_summary: {
+                internal: 0,
+                partner: 0,
+                public: 0
+            },
+            severity_summary: {
+                low: 0,
+                medium: 0,
+                high: 0,
+                critical: 0
+            },
+            top_risks: []
+        };
+    }
+}
+
 // Main function to initialize the dashboard
-function initDashboard() {
+async function initDashboard() {
+    // Fetch data from API
+    const data = await fetchDashboardData();
+    
     // Populate header stats
-    populateHeaderStats(mockDashboardData);
+    populateHeaderStats(data);
     
     // Create charts
-    createSeverityChart(mockDashboardData);
-    createExposureChart(mockDashboardData);
-    createRiskChart(mockDashboardData.top_risks);
+    createSeverityChart(data);
+    createExposureChart(data);
+    createRiskChart(data.top_risks);
     
     // Populate top risks table
-    populateTopRisksTable(mockDashboardData.top_risks);
+    populateTopRisksTable(data.top_risks);
     
-    console.log("ASM Dashboard initialized with mock data");
+    console.log("ASM Dashboard initialized with data from API");
 }
 
 // Initialize the dashboard when the page loads
