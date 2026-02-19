@@ -1,5 +1,8 @@
 # ASM-Texas-College-Final-year-Aasish
 
+**Author:** Aasish Khanal  
+**Institution:** Texas College
+
 A complete **Attack Surface Management (ASM)** project for inventorying assets, ingesting findings, calculating risk, and prioritizing remediation.
 
 ## What is implemented
