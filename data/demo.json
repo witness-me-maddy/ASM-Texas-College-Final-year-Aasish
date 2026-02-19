@@ -1,0 +1,80 @@
+{
+  "assets": [
+    {
+      "asset_id": "asset-001",
+      "hostname": "portal.texascollege.edu",
+      "owner": "IT Security",
+      "business_criticality": 5,
+      "exposure_level": "public",
+      "tags": [
+        "student",
+        "production",
+        "web"
+      ],
+      "services": [
+        {
+          "name": "https",
+          "port": 443,
+          "protocol": "tcp",
+          "internet_exposed": true
+        },
+        {
+          "name": "ssh",
+          "port": 22,
+          "protocol": "tcp",
+          "internet_exposed": false
+        }
+      ],
+      "vulnerabilities": [
+        {
+          "title": "Outdated OpenSSL",
+          "severity": "high",
+          "description": "OpenSSL version vulnerable to RCE chain.",
+          "cve": "CVE-2023-5678",
+          "affected_service": "https",
+          "discovered_at": "2026-02-19T05:59:09+00:00",
+          "remediated": false
+        },
+        {
+          "title": "Weak SSH Ciphers",
+          "severity": "medium",
+          "description": "Deprecated ciphers enabled.",
+          "cve": null,
+          "affected_service": "ssh",
+          "discovered_at": "2026-02-19T05:59:09+00:00",
+          "remediated": false
+        }
+      ]
+    },
+    {
+      "asset_id": "asset-002",
+      "hostname": "erp.internal.texascollege.edu",
+      "owner": "Enterprise Apps",
+      "business_criticality": 4,
+      "exposure_level": "internal",
+      "tags": [
+        "erp",
+        "finance"
+      ],
+      "services": [
+        {
+          "name": "mssql",
+          "port": 1433,
+          "protocol": "tcp",
+          "internet_exposed": false
+        }
+      ],
+      "vulnerabilities": [
+        {
+          "title": "Missing Security Patches",
+          "severity": "critical",
+          "description": "OS patch level behind security baseline.",
+          "cve": null,
+          "affected_service": null,
+          "discovered_at": "2026-02-19T05:59:09+00:00",
+          "remediated": false
+        }
+      ]
+    }
+  ]
+}
