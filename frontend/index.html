@@ -30,7 +30,7 @@
         </div>
       </header>
 
-      <section class="scan-strip" id="scanner">
+      <section class="scan-strip scan-strip-main" id="scanner">
         <input id="scanUrlInput" type="url" placeholder="Enter website URL (e.g. https://example.com)" />
         <button id="scanNowBtn">Run full scan</button>
         <input id="searchInput" type="search" placeholder="Search assets..." />
@@ -44,7 +44,6 @@
         </div>
         <div class="scan-strip">
           <input id="monitorUrlInput" type="url" placeholder="Target URL for continuous monitoring" />
-          <input id="monitorIntervalInput" type="number" min="10" value="60" />
           <button id="addMonitorBtn">Add monitor target</button>
         </div>
         <table>
@@ -78,7 +77,7 @@
         <h3>Scan history</h3>
         <table>
           <thead>
-            <tr><th>Target</th><th>Position</th><th>Open Ports</th><th>Vulnerabilities</th><th>Max EPSS</th><th>Created At</th></tr>
+            <tr><th>Target</th><th>Position</th><th>Open Ports</th><th>Tools</th><th>Vulnerabilities</th><th>Max EPSS</th><th>Created At</th></tr>
           </thead>
           <tbody id="reportRows"></tbody>
         </table>

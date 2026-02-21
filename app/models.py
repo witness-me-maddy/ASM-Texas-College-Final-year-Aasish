@@ -126,12 +126,16 @@ class ScanReport(BaseModel):
     started_at: datetime
     completed_at: datetime
     tools_executed: List[str]
+    scanned_port_range: str = "1-65535"
     assets_discovered: int
     exposures_discovered: int
     max_epss_score: float
     max_epss_percentile: float
     target_position: Optional[GeoPosition] = None
     open_ports: List[OpenPort] = Field(default_factory=list)
+    discovered_subdomains: List[str] = Field(default_factory=list)
+    discovered_ips: List[str] = Field(default_factory=list)
+    discovered_technologies: List[str] = Field(default_factory=list)
     top_exposures: List[Exposure] = Field(default_factory=list)
 
 

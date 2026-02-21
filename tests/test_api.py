@@ -12,20 +12,23 @@ def test_summary_endpoint_uses_epss_framework():
     assert payload['risk_framework'] == 'EPSS-first'
 
 
-def test_scan_creates_report_with_position_and_ports():
+def test_scan_collects_full_surface_details():
     response = client.post('/api/scan', json={'website_url': 'https://scanme.example.com'})
     assert response.status_code == 200
     payload = response.json()
-    assert payload['report']['status'] == 'completed'
-    assert payload['report']['target_position']['city']
-    assert len(payload['report']['open_ports']) >= 1
+    report = payload['report']
+    assert report['status'] == 'completed'
+    assert report['scanned_port_range'] == '1-65535'
+    assert len(report['open_ports']) >= 8
+    assert 'Nmap' in report['tools_executed']
+    assert 'Masscan' in report['tools_executed']
+    assert 'Subfinder' in report['tools_executed']
+    assert 'Assetfinder' in report['tools_executed']
+    assert 'Nikto' in report['tools_executed']
 
 
 def test_register_monitor_target_and_get_automation_status():
-    register = client.post(
-        '/api/monitor-targets',
-        json={'website_url': 'https://acme.io', 'scan_interval_seconds': 60},
-    )
+    register = client.post('/api/monitor-targets', json={'website_url': 'https://acme.io'})
     assert register.status_code == 200
 
     targets = client.get('/api/monitor-targets')

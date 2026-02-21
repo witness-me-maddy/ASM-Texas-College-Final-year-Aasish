@@ -45,10 +45,14 @@ class ASMScannerService:
         parsed = urlparse(str(payload.website_url))
         host = parsed.hostname or str(payload.website_url)
 
+        tools_executed = ["Nmap", "Masscan", "Subfinder", "Assetfinder", "Nikto", "Nuclei"]
         findings = self._simulate_tool_findings(host)
         exposures = self.adapter.normalize(findings)
         position = self._simulate_position(host)
         open_ports = self._simulate_open_ports(host)
+        subdomains = self._simulate_subdomains(host)
+        ips = self._simulate_ips(host)
+        technologies = self._simulate_technologies(host)
 
         asset = self.repository.upsert_asset(
             name=host,
@@ -71,13 +75,17 @@ class ASMScannerService:
             status=ScanStatus.completed,
             started_at=started,
             completed_at=datetime.now(timezone.utc),
-            tools_executed=sorted(list({f.tool_name for f in findings})),
-            assets_discovered=1,
+            tools_executed=tools_executed,
+            scanned_port_range="1-65535",
+            assets_discovered=1 + len(subdomains),
             exposures_discovered=created,
             max_epss_score=round(max_epss, 4),
             max_epss_percentile=round(max_percentile, 4),
             target_position=position,
             open_ports=open_ports,
+            discovered_subdomains=subdomains,
+            discovered_ips=ips,
+            discovered_technologies=technologies,
             top_exposures=top_exposures,
         )
         self.repository.add_report(report)
@@ -145,29 +153,54 @@ class ASMScannerService:
 
     def _simulate_open_ports(self, host: str) -> list[OpenPort]:
         port_profiles = [
-            OpenPort(port=443, protocol="tcp", service="https"),
-            OpenPort(port=80, protocol="tcp", service="http"),
+            OpenPort(port=21, protocol="tcp", service="ftp"),
             OpenPort(port=22, protocol="tcp", service="ssh"),
+            OpenPort(port=25, protocol="tcp", service="smtp"),
+            OpenPort(port=53, protocol="udp", service="dns"),
+            OpenPort(port=80, protocol="tcp", service="http"),
+            OpenPort(port=110, protocol="tcp", service="pop3"),
+            OpenPort(port=143, protocol="tcp", service="imap"),
+            OpenPort(port=443, protocol="tcp", service="https"),
+            OpenPort(port=445, protocol="tcp", service="smb"),
+            OpenPort(port=3306, protocol="tcp", service="mysql"),
             OpenPort(port=3389, protocol="tcp", service="rdp"),
             OpenPort(port=5432, protocol="tcp", service="postgresql"),
-            OpenPort(port=3306, protocol="tcp", service="mysql"),
+            OpenPort(port=6379, protocol="tcp", service="redis"),
+            OpenPort(port=8080, protocol="tcp", service="http-alt"),
+            OpenPort(port=8443, protocol="tcp", service="https-alt"),
         ]
         seed = int(hashlib.sha256((host + "ports").encode("utf-8")).hexdigest()[:8], 16)
-        count = 3 + (seed % 2)
+        count = 8 + (seed % 5)
         return [port_profiles[(seed + i) % len(port_profiles)] for i in range(count)]
+
+    def _simulate_subdomains(self, host: str) -> list[str]:
+        labels = ["www", "api", "dev", "staging", "vpn", "mail", "cdn", "auth"]
+        seed = int(hashlib.sha256((host + "subs").encode("utf-8")).hexdigest()[:8], 16)
+        count = 4 + (seed % 3)
+        return [f"{labels[(seed + i) % len(labels)]}.{host}" for i in range(count)]
+
+    def _simulate_ips(self, host: str) -> list[str]:
+        seed = int(hashlib.sha256((host + "ips").encode("utf-8")).hexdigest()[:8], 16)
+        return [f"203.0.113.{(seed % 200) + i + 1}" for i in range(3)]
+
+    def _simulate_technologies(self, host: str) -> list[str]:
+        tech = ["Nginx", "Cloudflare", "React", "FastAPI", "PostgreSQL", "Redis"]
+        seed = int(hashlib.sha256((host + "tech").encode("utf-8")).hexdigest()[:8], 16)
+        return [tech[(seed + i) % len(tech)] for i in range(4)]
 
     def _simulate_tool_findings(self, host: str) -> list[ToolFinding]:
         tool_cves = [
             ("Nmap", "OpenSSH outdated service fingerprint", "CVE-2024-6387", "high"),
+            ("Masscan", "Wide attack-surface exposure on multiple ports", "CVE-2023-44487", "high"),
+            ("Nikto", "Outdated web server component", "CVE-2023-25690", "medium"),
             ("Nuclei", "Exposed admin/debug endpoint", "CVE-2023-20198", "critical"),
-            ("OWASP ZAP", "Potential XSS vector in response reflection", "CVE-2023-38545", "medium"),
-            ("SSLyze", "TLS misconfiguration with weak negotiation", "CVE-2023-3446", "high"),
-            ("WhatWeb", "Framework version disclosure", "CVE-2021-41773", "medium"),
+            ("Subfinder", "Sensitive subdomain takeover candidate", "CVE-2021-41773", "medium"),
+            ("Assetfinder", "Leaked legacy host with weak TLS", "CVE-2023-3446", "high"),
         ]
 
         seed = int(hashlib.sha256(host.encode("utf-8")).hexdigest()[:8], 16)
         offset = seed % len(tool_cves)
-        selected = [tool_cves[(offset + i) % len(tool_cves)] for i in range(4)]
+        selected = [tool_cves[(offset + i) % len(tool_cves)] for i in range(5)]
 
         findings: list[ToolFinding] = []
         for idx, (tool, title, cve, sev) in enumerate(selected, start=1):

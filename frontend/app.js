@@ -16,7 +16,6 @@ const scanStatus = document.getElementById('scanStatus');
 const updatedAt = document.getElementById('updatedAt');
 const monitorRows = document.getElementById('monitorRows');
 const monitorUrlInput = document.getElementById('monitorUrlInput');
-const monitorIntervalInput = document.getElementById('monitorIntervalInput');
 const addMonitorBtn = document.getElementById('addMonitorBtn');
 const automationState = document.getElementById('automationState');
 
@@ -113,7 +112,7 @@ function renderReports(reports) {
   reportRows.innerHTML = '';
   reports.forEach((r) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.target_host || r.website_url}</td><td>${fmtPosition(r.target_position)}</td><td>${fmtPorts(r.open_ports)}</td><td>${r.exposures_discovered}</td><td>${Number(r.max_epss_score).toFixed(2)}</td><td>${new Date(r.completed_at).toLocaleString()}</td>`;
+    tr.innerHTML = `<td>${r.target_host || r.website_url}<div class="muted">subs: ${(r.discovered_subdomains || []).length} • ips: ${(r.discovered_ips || []).length}</div></td><td>${fmtPosition(r.target_position)}</td><td>${fmtPorts(r.open_ports)}</td><td>${(r.tools_executed || []).join(', ')}</td><td>${r.exposures_discovered}</td><td>${Number(r.max_epss_score).toFixed(2)}</td><td>${new Date(r.completed_at).toLocaleString()}</td>`;
     reportRows.append(tr);
   });
 }
@@ -149,11 +148,10 @@ async function runScan(url) {
 
 async function addMonitorTarget() {
   const url = monitorUrlInput.value.trim();
-  const interval = Number(monitorIntervalInput.value || 60);
   if (!url) return;
   await safeFetch(`${API_BASE}/api/monitor-targets`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ website_url: url, scan_interval_seconds: interval }),
+    body: JSON.stringify({ website_url: url }),
   });
   monitorUrlInput.value = '';
   await refresh(searchInput.value.trim());
