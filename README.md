@@ -31,6 +31,23 @@ This platform prioritizes vulnerabilities using **Exploit Prediction Scoring Sys
 - `POST /api/monitor-targets`
 - `POST /api/ingest`
 
+## Run with Docker (recommended after downloading ZIP)
+```bash
+docker compose up --build
+```
+
+Then open: `http://localhost:8000`
+
+To run detached:
+```bash
+docker compose up --build -d
+```
+
+To stop:
+```bash
+docker compose down
+```
+
 ## Run locally
 ```bash
 python -m venv .venv

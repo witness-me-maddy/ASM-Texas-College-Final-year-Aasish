@@ -1,0 +1,9 @@
+services:
+  aasish-asm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aasish-asm
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
