@@ -5,13 +5,24 @@ from datetime import datetime, timezone
 from typing import Dict, List
 from uuid import uuid4
 
-from app.models import Asset, AssetType, Exposure, ExposureStatus, ScanReport, Summary
+from app.models import (
+    Asset,
+    AssetType,
+    Exposure,
+    ExposureStatus,
+    MonitoredTarget,
+    OpenPort,
+    ScanReport,
+    Summary,
+)
 
 
 class InMemoryRepository:
     def __init__(self) -> None:
         self.assets: Dict[str, Asset] = {}
         self.reports: List[ScanReport] = []
+        self.monitored_targets: Dict[str, MonitoredTarget] = {}
+        self.last_automation_cycle_at: datetime | None = None
         self._seed()
 
     def _seed(self) -> None:
@@ -26,6 +37,10 @@ class InMemoryRepository:
                 internet_exposed=True,
                 criticality=5,
                 tags=["production", "student-facing"],
+                open_ports=[
+                    OpenPort(port=443, protocol="tcp", service="https"),
+                    OpenPort(port=22, protocol="tcp", service="ssh"),
+                ],
                 exposures=[
                     Exposure(
                         id="exp-1",
@@ -49,6 +64,7 @@ class InMemoryRepository:
                 internet_exposed=True,
                 criticality=4,
                 tags=["api", "production"],
+                open_ports=[OpenPort(port=443, protocol="tcp", service="https")],
                 exposures=[],
             ),
         }
@@ -74,6 +90,7 @@ class InMemoryRepository:
             criticality=3,
             tags=["discovered"],
             exposures=[],
+            open_ports=[],
         )
         self.assets[asset.id] = asset
         return asset
@@ -89,6 +106,13 @@ class InMemoryRepository:
 
     def list_reports(self) -> List[ScanReport]:
         return self.reports
+
+    def upsert_monitored_target(self, target: MonitoredTarget) -> MonitoredTarget:
+        self.monitored_targets[target.id] = target
+        return target
+
+    def list_monitored_targets(self) -> List[MonitoredTarget]:
+        return list(self.monitored_targets.values())
 
     def summary(self) -> Summary:
         exposures = [e for a in self.assets.values() for e in a.exposures]

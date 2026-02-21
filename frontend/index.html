@@ -10,24 +10,14 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="logo">🛡️ <span>XingRin ASM</span></div>
-
       <p class="menu-title">Key features:</p>
       <nav class="menu">
         <a class="active" href="#">Dashboard</a>
         <a href="#scanner">Search</a>
-        <a href="#assets">Organization</a>
-        <a href="#reports">Scan</a>
-        <a href="#findings">Vulnerabilities</a>
+        <a href="#automation">Continuous Scan</a>
+        <a href="#reports">Scan Reports</a>
+        <a href="#assets">Assets</a>
       </nav>
-
-      <p class="menu-title">System Settings</p>
-      <nav class="menu menu-secondary">
-        <a href="#">Scan nodes</a>
-        <a href="#">System logs</a>
-        <a href="#">Notification settings</a>
-        <a href="#">API key</a>
-      </nav>
-
       <div class="profile">CN&nbsp;&nbsp;<strong>admin</strong></div>
     </aside>
 
@@ -46,6 +36,24 @@
         <input id="searchInput" type="search" placeholder="Search assets..." />
       </section>
       <div id="scanStatus" class="muted"></div>
+
+      <section class="panel" id="automation">
+        <div class="row-between">
+          <h3>Continuous ASM Automation</h3>
+          <span id="automationState" class="badge bg-Low">unknown</span>
+        </div>
+        <div class="scan-strip">
+          <input id="monitorUrlInput" type="url" placeholder="Target URL for continuous monitoring" />
+          <input id="monitorIntervalInput" type="number" min="10" value="60" />
+          <button id="addMonitorBtn">Add monitor target</button>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Target</th><th>Interval(s)</th><th>Last Scan</th><th>Status</th></tr>
+          </thead>
+          <tbody id="monitorRows"></tbody>
+        </table>
+      </section>
 
       <section class="grid-2">
         <article class="panel">
@@ -66,25 +74,11 @@
         </article>
       </section>
 
-      <section class="panel tabs-panel" id="reports">
-        <div class="tabs-head">
-          <div class="tabs">
-            <button class="tab active">Scan history</button>
-            <button class="tab">Vulnerabilities</button>
-          </div>
-          <div class="pill">Columns ▾</div>
-        </div>
-
+      <section class="panel" id="reports">
+        <h3>Scan history</h3>
         <table>
           <thead>
-            <tr>
-              <th>Target</th>
-              <th>Summary</th>
-              <th>Engine Name</th>
-              <th>Created At</th>
-              <th>Status</th>
-              <th>Progress</th>
-            </tr>
+            <tr><th>Target</th><th>Position</th><th>Open Ports</th><th>Vulnerabilities</th><th>Max EPSS</th><th>Created At</th></tr>
           </thead>
           <tbody id="reportRows"></tbody>
         </table>
@@ -96,17 +90,10 @@
       </section>
 
       <section class="panel" id="assets">
-        <h3>Asset Inventory</h3>
+        <h3>Asset Inventory & Position</h3>
         <table>
           <thead>
-            <tr>
-              <th>Asset</th>
-              <th>Owner</th>
-              <th>Business Unit</th>
-              <th>Open Exposures</th>
-              <th>Top EPSS</th>
-              <th>Risk Band</th>
-            </tr>
+            <tr><th>Asset</th><th>Position</th><th>Open Ports</th><th>Open Exposures</th><th>Top EPSS</th><th>Risk</th></tr>
           </thead>
           <tbody id="assetRows"></tbody>
         </table>

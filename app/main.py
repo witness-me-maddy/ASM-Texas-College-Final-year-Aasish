@@ -8,12 +8,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.connectors.tool_connectors import ToolIngestionAdapter
-from app.models import IngestRequest, IngestResult, ScanRequest, ScanResponse, SearchResult
+from app.models import (
+    IngestRequest,
+    IngestResult,
+    MonitorRequest,
+    MonitorResponse,
+    ScanRequest,
+    ScanResponse,
+    SearchResult,
+)
 from app.services.epss_service import EPSSService
 from app.services.repository import InMemoryRepository
 from app.services.scanner_service import ASMScannerService
 
-app = FastAPI(title="Enterprise ASM Platform", version="1.1.0")
+app = FastAPI(title="Enterprise ASM Platform", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +38,16 @@ scanner_service = ASMScannerService(repo, ingestion_adapter, epss_service)
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend")
+
+
+@app.on_event("startup")
+def startup_event() -> None:
+    scanner_service.start_automation()
+
+
+@app.on_event("shutdown")
+def shutdown_event() -> None:
+    scanner_service.stop_automation()
 
 
 @app.get("/")
@@ -59,6 +77,22 @@ def list_assets():
 @app.get("/api/reports")
 def list_reports():
     return {"reports": repo.list_reports()}
+
+
+@app.get("/api/automation")
+def automation_status():
+    return {"automation": scanner_service.automation_status()}
+
+
+@app.get("/api/monitor-targets")
+def list_monitor_targets():
+    return {"targets": repo.list_monitored_targets()}
+
+
+@app.post("/api/monitor-targets", response_model=MonitorResponse)
+def register_monitor_target(payload: MonitorRequest):
+    target = scanner_service.register_target(payload)
+    return MonitorResponse(target=target)
 
 
 @app.get("/api/assets/{asset_id}")

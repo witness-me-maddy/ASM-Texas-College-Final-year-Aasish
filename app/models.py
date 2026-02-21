@@ -24,6 +24,20 @@ class ScanStatus(str, Enum):
     completed = "completed"
 
 
+class GeoPosition(BaseModel):
+    city: str
+    country: str
+    latitude: float
+    longitude: float
+
+
+class OpenPort(BaseModel):
+    port: int
+    protocol: str
+    service: str
+    state: str = "open"
+
+
 class Exposure(BaseModel):
     id: str
     title: str
@@ -45,6 +59,8 @@ class Asset(BaseModel):
     internet_exposed: bool = True
     criticality: int = Field(..., ge=1, le=5)
     tags: List[str] = Field(default_factory=list)
+    position: Optional[GeoPosition] = None
+    open_ports: List[OpenPort] = Field(default_factory=list)
     exposures: List[Exposure] = Field(default_factory=list)
 
 
@@ -85,6 +101,23 @@ class ScanRequest(BaseModel):
     website_url: HttpUrl
 
 
+class MonitoredTarget(BaseModel):
+    id: str
+    website_url: HttpUrl
+    enabled: bool = True
+    scan_interval_seconds: int = Field(default=60, ge=10)
+    last_scan_at: Optional[datetime] = None
+
+
+class MonitorRequest(BaseModel):
+    website_url: HttpUrl
+    scan_interval_seconds: int = Field(default=60, ge=10)
+
+
+class MonitorResponse(BaseModel):
+    target: MonitoredTarget
+
+
 class ScanReport(BaseModel):
     id: str
     website_url: HttpUrl
@@ -97,9 +130,17 @@ class ScanReport(BaseModel):
     exposures_discovered: int
     max_epss_score: float
     max_epss_percentile: float
+    target_position: Optional[GeoPosition] = None
+    open_ports: List[OpenPort] = Field(default_factory=list)
     top_exposures: List[Exposure] = Field(default_factory=list)
 
 
 class ScanResponse(BaseModel):
     report: ScanReport
     asset: Asset
+
+
+class AutomationStatus(BaseModel):
+    running: bool
+    monitored_target_count: int
+    last_cycle_at: Optional[datetime] = None
