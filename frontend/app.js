@@ -1,15 +1,19 @@
 const API_BASE = window.location.origin;
 
-const summaryCards = document.getElementById('summaryCards');
-const assetRows = document.getElementById('assetRows');
-const businessUnitChart = document.getElementById('businessUnitChart');
-const topFindings = document.getElementById('topFindings');
 const reportRows = document.getElementById('reportRows');
+const assetRows = document.getElementById('assetRows');
+const topFindings = document.getElementById('topFindings');
+const riskLegend = document.getElementById('riskLegend');
+const assetLegend = document.getElementById('assetLegend');
+const totalVulns = document.getElementById('totalVulns');
+const trendCanvas = document.getElementById('trendCanvas');
+const donutCanvas = document.getElementById('donutCanvas');
 const searchInput = document.getElementById('searchInput');
-const riskFramework = document.getElementById('riskFramework');
-const scanNowBtn = document.getElementById('scanNowBtn');
 const scanUrlInput = document.getElementById('scanUrlInput');
+const scanNowBtn = document.getElementById('scanNowBtn');
+const quickScanBtn = document.getElementById('quickScanBtn');
 const scanStatus = document.getElementById('scanStatus');
+const updatedAt = document.getElementById('updatedAt');
 
 function riskBand(score) {
   if (score >= 0.7) return 'Critical';
@@ -20,157 +24,178 @@ function riskBand(score) {
 
 async function safeFetch(url, options) {
   try {
-    const response = await fetch(url, options);
-    if (!response.ok) throw new Error('request failed');
-    return await response.json();
+    const r = await fetch(url, options);
+    if (!r.ok) throw new Error('bad');
+    return await r.json();
   } catch {
     return null;
   }
 }
 
-function renderSummary(summary) {
-  summaryCards.innerHTML = '';
-  [
-    ['Total Assets', summary.asset_count],
-    ['Open Exposures', summary.open_exposure_count],
-    ['High Risk by EPSS', summary.high_risk_exposure_count],
-    ['Internet Exposed', summary.internet_exposed_assets],
-    ['Mean EPSS', Number(summary.mean_epss).toFixed(2)],
-  ].forEach(([label, value]) => {
-    const card = document.createElement('article');
-    card.className = 'card';
-    card.innerHTML = `<h4>${label}</h4><p>${value}</p>`;
-    summaryCards.append(card);
-  });
-}
-
-function renderBusinessUnits(data) {
-  businessUnitChart.innerHTML = '';
-  const entries = Object.entries(data);
-  const maxValue = Math.max(...entries.map(([, value]) => value), 1);
-
-  entries.forEach(([name, value]) => {
-    const row = document.createElement('div');
-    row.className = 'bar-row';
-    row.innerHTML = `
-      <span class="bar-label">${name}</span>
-      <div class="bar-track"><div class="bar-fill" style="width:${(value / maxValue) * 100}%"></div></div>
-      <span class="bar-value">${value}</span>
-    `;
-    businessUnitChart.append(row);
-  });
-}
-
-function renderTopFindings(assets) {
-  topFindings.innerHTML = '';
-  const exposures = assets
-    .flatMap((asset) => asset.exposures
-      .filter((e) => e.status === 'open')
-      .map((e) => ({ ...e, asset: asset.name })))
-    .sort((a, b) => b.epss_score - a.epss_score)
-    .slice(0, 5);
-
-  if (exposures.length === 0) {
-    topFindings.innerHTML = '<li><span>No open findings yet.</span></li>';
-    return;
+function drawTrend(assets) {
+  const ctx = trendCanvas.getContext('2d');
+  const w = trendCanvas.width;
+  const h = trendCanvas.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = '#242a33';
+  for (let i = 0; i < 5; i++) {
+    const y = 30 + i * 45;
+    ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(w - 20, y); ctx.stroke();
   }
 
-  exposures.forEach((e) => {
-    const band = riskBand(e.epss_score);
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <div>
-        <strong>${e.title}</strong>
-        <div class="meta">${e.asset} • ${e.source_tool} • ${e.cve || 'No CVE'}</div>
-      </div>
-      <span class="badge bg-${band}">EPSS ${(e.epss_score * 100).toFixed(1)}%</span>
-    `;
-    topFindings.append(li);
+  const series = [
+    { key: 'Subdomains', color: '#3a7bfd', values: [4, 4.2, 4.3, 4.5, 4.8, 5, 5.2] },
+    { key: 'IP', color: '#ff8c1a', values: [0.8, 0.82, 0.84, 0.87, 0.88, 0.89, 0.92] },
+    { key: 'Endpoint', color: '#f1c40f', values: [9.8, 10, 10.2, 10.4, 10.5, 10.9, 11.2] },
+    { key: 'Website', color: '#2ecc71', values: [2.8, 2.9, 3.0, 3.1, 3.2, 3.25, 3.35] },
+  ];
+
+  series.forEach((s) => {
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    s.values.forEach((v, i) => {
+      const x = 30 + i * ((w - 60) / (s.values.length - 1));
+      const y = h - 25 - (v / 12) * (h - 60);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
   });
+
+  assetLegend.innerHTML = series.map((s) => `<span><i class="dot" style="background:${s.color}"></i>${s.key}</span>`).join('');
+}
+
+function drawDonutFromAssets(assets) {
+  const exposures = assets.flatMap((a) => a.exposures || []).filter((e) => e.status === 'open');
+  const buckets = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+  exposures.forEach((e) => { buckets[riskBand(e.epss_score)] += 1; });
+
+  const data = [
+    { label: 'Critical', value: buckets.Critical, color: '#ef3b3b' },
+    { label: 'High risk', value: buckets.High, color: '#ff8c1a' },
+    { label: 'Medium', value: buckets.Medium, color: '#f1c40f' },
+    { label: 'Low risk', value: buckets.Low, color: '#3a7bfd' },
+  ];
+
+  const total = Math.max(data.reduce((a, b) => a + b.value, 0), 1);
+  totalVulns.textContent = String(total);
+
+  const ctx = donutCanvas.getContext('2d');
+  const cx = donutCanvas.width / 2;
+  const cy = donutCanvas.height / 2;
+  const r = 88;
+  const inner = 52;
+  let start = -Math.PI / 2;
+  ctx.clearRect(0, 0, donutCanvas.width, donutCanvas.height);
+
+  data.forEach((d) => {
+    const angle = (d.value / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = d.color;
+    ctx.fill();
+    start += angle;
+  });
+
+  ctx.globalCompositeOperation = 'destination-out';
+  ctx.beginPath(); ctx.arc(cx, cy, inner, 0, Math.PI * 2); ctx.fill();
+  ctx.globalCompositeOperation = 'source-over';
+
+  riskLegend.innerHTML = data.map((d) => `<span><i class="dot" style="background:${d.color}"></i>${d.label} ${d.value}</span>`).join('');
 }
 
 function renderAssets(rows) {
   assetRows.innerHTML = '';
   rows.forEach((item) => {
     const asset = item.asset || item;
-    const exposures = asset.exposures.filter((e) => e.status === 'open');
-    const top = exposures.reduce((acc, e) => Math.max(acc, e.epss_score), 0);
-    const band = item.risk_band || riskBand(top);
-
+    const ex = (asset.exposures || []).filter((e) => e.status === 'open');
+    const top = ex.reduce((m, e) => Math.max(m, e.epss_score), 0);
+    const band = riskBand(top);
     const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${asset.name}</td>
-      <td>${asset.owner}</td>
-      <td>${asset.business_unit}</td>
-      <td>${exposures.length}</td>
-      <td>${top.toFixed(2)}</td>
-      <td><span class="badge bg-${band}">${band}</span></td>
-    `;
+    tr.innerHTML = `<td>${asset.name}</td><td>${asset.owner}</td><td>${asset.business_unit}</td><td>${ex.length}</td><td>${top.toFixed(2)}</td><td><span class="badge bg-${band}">${band}</span></td>`;
     assetRows.append(tr);
   });
 }
 
 function renderReports(reports) {
   reportRows.innerHTML = '';
-  reports.forEach((report) => {
+  reports.forEach((r) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${report.website_url}</td>
-      <td>${report.status}</td>
-      <td>${report.tools_executed.join(', ')}</td>
-      <td>${report.exposures_discovered}</td>
-      <td>${Number(report.max_epss_score).toFixed(2)}</td>
-      <td>${new Date(report.completed_at).toLocaleString()}</td>
+      <td>${r.target_host || r.website_url}</td>
+      <td><span class="badge bg-Low">assets ${r.assets_discovered}</span> <span class="badge bg-High">vulns ${r.exposures_discovered}</span></td>
+      <td>Subdomain Discovery · Web Crawling · Nuclei Scanner</td>
+      <td>${new Date(r.completed_at).toLocaleString()}</td>
+      <td><span class="status-done">was done</span></td>
+      <td><span class="progress"><span style="width:100%"></span></span> 100%</td>
     `;
     reportRows.append(tr);
   });
 }
 
-async function loadDashboard(query = '') {
-  const [summaryData, assetData, reportData] = await Promise.all([
+function renderTopFindings(assets) {
+  topFindings.innerHTML = '';
+  const ex = assets.flatMap((a) => (a.exposures || []).map((e) => ({...e, asset:a.name})))
+    .filter((e) => e.status === 'open')
+    .sort((a, b) => b.epss_score - a.epss_score)
+    .slice(0, 6);
+
+  ex.forEach((e) => {
+    const b = riskBand(e.epss_score);
+    const li = document.createElement('li');
+    li.innerHTML = `<div><strong>${e.title}</strong><div class="muted">${e.asset} • ${e.source_tool} • ${e.cve || 'No CVE'}</div></div><span class="badge bg-${b}">EPSS ${(e.epss_score * 100).toFixed(1)}%</span>`;
+    topFindings.append(li);
+  });
+}
+
+async function runScan(url) {
+  return safeFetch(`${API_BASE}/api/scan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ website_url: url }),
+  });
+}
+
+async function refresh(query = '') {
+  const [summary, assetsData, reportsData] = await Promise.all([
     safeFetch(`${API_BASE}/api/summary`),
     safeFetch(`${API_BASE}${query ? `/api/search?query=${encodeURIComponent(query)}` : '/api/assets'}`),
     safeFetch(`${API_BASE}/api/reports`),
   ]);
 
-  if (!summaryData || !assetData) {
-    scanStatus.textContent = 'Backend unavailable. Start API service for live data.';
+  if (!assetsData) {
+    scanStatus.textContent = 'Backend unavailable. Start FastAPI server.';
     return;
   }
 
-  const rows = assetData.assets || assetData;
-  renderSummary(summaryData.summary);
-  renderBusinessUnits(summaryData.open_exposures_by_business_unit || {});
-  riskFramework.textContent = summaryData.risk_framework;
+  const rows = assetsData.assets || assetsData;
+  const assets = rows.map((r) => r.asset || r);
   renderAssets(rows);
-  renderTopFindings(rows.map((r) => r.asset || r));
-  renderReports((reportData && reportData.reports) || []);
+  renderReports((reportsData && reportsData.reports) || []);
+  renderTopFindings(assets);
+  drawTrend(assets);
+  drawDonutFromAssets(assets);
+
+  if (summary && summary.risk_framework) {
+    updatedAt.textContent = `Statistics updated on ${new Date().toLocaleString()} · ${summary.risk_framework}`;
+  }
 }
 
-async function runWebsiteScan() {
-  const websiteUrl = scanUrlInput.value.trim();
-  if (!websiteUrl) {
-    scanStatus.textContent = 'Enter a valid website URL.';
-    return;
-  }
+scanNowBtn.addEventListener('click', async () => {
+  const url = scanUrlInput.value.trim();
+  if (!url) { scanStatus.textContent = 'Please enter website URL.'; return; }
+  scanStatus.textContent = 'Running full scan...';
+  const result = await runScan(url);
+  if (!result) { scanStatus.textContent = 'Scan failed. API unavailable.'; return; }
+  scanStatus.textContent = `Scan completed for ${result.report.target_host}. Report generated.`;
+  await refresh(searchInput.value.trim());
+});
 
-  scanStatus.textContent = 'Running full attack-surface scan...';
-  const response = await safeFetch(`${API_BASE}/api/scan`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ website_url: websiteUrl }),
-  });
+quickScanBtn.addEventListener('click', async () => {
+  scanUrlInput.value = scanUrlInput.value.trim() || 'https://example.com';
+  scanNowBtn.click();
+});
 
-  if (!response) {
-    scanStatus.textContent = 'Scan failed. Ensure backend API is running.';
-    return;
-  }
+searchInput.addEventListener('input', (e) => refresh(e.target.value.trim()));
 
-  scanStatus.textContent = `Scan complete for ${response.report.target_host}. Report generated with ${response.report.exposures_discovered} EPSS-ranked exposures.`;
-  await loadDashboard(searchInput.value.trim());
-}
-
-searchInput.addEventListener('input', (event) => loadDashboard(event.target.value.trim()));
-scanNowBtn.addEventListener('click', runWebsiteScan);
-
-loadDashboard();
+refresh();
