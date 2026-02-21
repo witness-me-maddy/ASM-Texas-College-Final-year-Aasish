@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Texas College Enterprise ASM</title>
+  <link rel="stylesheet" href="/frontend/styles.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">ASM</div>
+        <div>
+          <h1>Enterprise ASM</h1>
+          <p>Texas College SOC</p>
+        </div>
+      </div>
+      <nav>
+        <a class="active" href="#">Overview</a>
+        <a href="#scanner">Scanner</a>
+        <a href="#reports">Reports</a>
+        <a href="#assets">Assets</a>
+      </nav>
+      <section class="framework">
+        <h3>Risk Framework</h3>
+        <p id="riskFramework">EPSS-first prioritization</p>
+      </section>
+    </aside>
+
+    <main class="content">
+      <header class="topbar">
+        <div>
+          <h2>Attack Surface Intelligence</h2>
+          <p>Enter website URL → full scan simulation → EPSS report in dashboard.</p>
+        </div>
+        <div class="actions">
+          <input id="searchInput" type="search" placeholder="Search asset or owner..." />
+        </div>
+      </header>
+
+      <section class="panel" id="scanner">
+        <div class="panel-head"><h3>Website Scanner</h3></div>
+        <div class="scanner-row">
+          <input id="scanUrlInput" type="url" placeholder="https://example.com" />
+          <button id="scanNowBtn">Scan Everything</button>
+          <span id="scanStatus" class="meta"></span>
+        </div>
+      </section>
+
+      <section class="kpis" id="summaryCards"></section>
+
+      <section class="grid-2">
+        <article class="panel">
+          <div class="panel-head">
+            <h3>Exposure Pressure by Business Unit</h3>
+          </div>
+          <div id="businessUnitChart" class="bars"></div>
+        </article>
+
+        <article class="panel" id="findings">
+          <div class="panel-head">
+            <h3>Top EPSS Exposures</h3>
+          </div>
+          <ul id="topFindings" class="findings"></ul>
+        </article>
+      </section>
+
+      <section class="panel" id="reports">
+        <div class="panel-head"><h3>Generated Scan Reports</h3></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Website</th><th>Status</th><th>Tools</th><th>Exposures</th><th>Max EPSS</th><th>Completed</th>
+            </tr>
+          </thead>
+          <tbody id="reportRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="assets">
+        <div class="panel-head">
+          <h3>Asset Inventory</h3>
+          <span class="pill">Live inventory</span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Asset</th>
+              <th>Owner</th>
+              <th>Business Unit</th>
+              <th>Open Exposures</th>
+              <th>Top EPSS</th>
+              <th>Risk Band</th>
+            </tr>
+          </thead>
+          <tbody id="assetRows"></tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+
+  <script src="/frontend/app.js"></script>
+</body>
+</html>
