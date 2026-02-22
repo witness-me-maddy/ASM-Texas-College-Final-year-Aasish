@@ -27,6 +27,7 @@ This platform prioritizes vulnerabilities using **Exploit Prediction Scoring Sys
 - `GET /api/search?query=...`
 - `POST /api/scan`
 - `GET /api/reports`
+- `GET /api/reports/{report_id}`
 - `GET /api/automation`
 - `GET /api/monitor-targets`
 - `POST /api/monitor-targets`
@@ -56,3 +57,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+
+Note: the app ships with a seed report so the frontend target-intelligence panel has immediate data after first startup.

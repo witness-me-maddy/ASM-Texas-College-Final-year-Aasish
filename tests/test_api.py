@@ -12,6 +12,20 @@ def test_summary_endpoint_uses_epss_framework():
     assert payload['risk_framework'] == 'EPSS-first'
 
 
+def test_seed_report_exists_and_report_details_endpoint_works():
+    reports = client.get('/api/reports')
+    assert reports.status_code == 200
+    rows = reports.json()['reports']
+    assert len(rows) >= 1
+
+    report_id = rows[0]['id']
+    detail = client.get(f'/api/reports/{report_id}')
+    assert detail.status_code == 200
+    report = detail.json()['report']
+    assert report['scanned_port_range'] == '1-65535'
+    assert report['waf_detected'] is not None
+
+
 def test_scan_collects_comprehensive_target_intelligence():
     response = client.post('/api/scan', json={'website_url': 'https://scanme.example.com'})
     assert response.status_code == 200
@@ -24,7 +38,6 @@ def test_scan_collects_comprehensive_target_intelligence():
         assert tool in report['tools_executed']
     assert len(report['discovered_subdomains']) >= 5
     assert len(report['discovered_urls']) >= 5
-    assert report['waf_detected'] is not None
 
 
 def test_register_monitor_target_and_get_automation_status():

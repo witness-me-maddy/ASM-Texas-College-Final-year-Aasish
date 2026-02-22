@@ -10,9 +10,11 @@ from app.models import (
     AssetType,
     Exposure,
     ExposureStatus,
+    GeoPosition,
     MonitoredTarget,
     OpenPort,
     ScanReport,
+    ScanStatus,
     Summary,
 )
 
@@ -27,6 +29,18 @@ class InMemoryRepository:
 
     def _seed(self) -> None:
         now = datetime.now(timezone.utc)
+        base_exposure = Exposure(
+            id="exp-1",
+            title="Outdated OpenSSL package",
+            description="Detected by vulnerability scanner",
+            cve="CVE-2023-0286",
+            epss_score=0.62,
+            epss_percentile=0.93,
+            source_tool="Nessus",
+            discovered_at=now,
+            status=ExposureStatus.open,
+        )
+
         self.assets = {
             "asset-1": Asset(
                 id="asset-1",
@@ -37,23 +51,13 @@ class InMemoryRepository:
                 internet_exposed=True,
                 criticality=5,
                 tags=["production", "student-facing"],
+                position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
                 open_ports=[
                     OpenPort(port=443, protocol="tcp", service="https"),
                     OpenPort(port=22, protocol="tcp", service="ssh"),
+                    OpenPort(port=8443, protocol="tcp", service="https-alt"),
                 ],
-                exposures=[
-                    Exposure(
-                        id="exp-1",
-                        title="Outdated OpenSSL package",
-                        description="Detected by vulnerability scanner",
-                        cve="CVE-2023-0286",
-                        epss_score=0.62,
-                        epss_percentile=0.93,
-                        source_tool="Nessus",
-                        discovered_at=now,
-                        status=ExposureStatus.open,
-                    )
-                ],
+                exposures=[base_exposure],
             ),
             "asset-2": Asset(
                 id="asset-2",
@@ -68,6 +72,37 @@ class InMemoryRepository:
                 exposures=[],
             ),
         }
+
+        self.reports = [
+            ScanReport(
+                id="scan-seed-1",
+                website_url="https://portal.texascollege.edu",
+                target_host="portal.texascollege.edu",
+                status=ScanStatus.completed,
+                started_at=now,
+                completed_at=now,
+                tools_executed=["Nmap", "Masscan", "Subfinder", "Nuclei"],
+                scanned_port_range="1-65535",
+                assets_discovered=5,
+                exposures_discovered=1,
+                max_epss_score=0.62,
+                max_epss_percentile=0.93,
+                target_position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
+                open_ports=[
+                    OpenPort(port=443, protocol="tcp", service="https"),
+                    OpenPort(port=22, protocol="tcp", service="ssh"),
+                    OpenPort(port=8443, protocol="tcp", service="https-alt"),
+                ],
+                discovered_subdomains=["www.portal.texascollege.edu", "api.portal.texascollege.edu"],
+                discovered_ips=["203.0.113.10", "203.0.113.11"],
+                discovered_technologies=["Nginx", "React", "FastAPI"],
+                discovered_urls=["https://portal.texascollege.edu/login", "https://portal.texascollege.edu/admin"],
+                discovered_emails=["security@texascollege.edu"],
+                discovered_cloud_assets=["aws-s3-public-bucket"],
+                waf_detected="Cloudflare WAF",
+                top_exposures=[base_exposure],
+            )
+        ]
 
     def list_assets(self) -> List[Asset]:
         return list(self.assets.values())
@@ -106,6 +141,9 @@ class InMemoryRepository:
 
     def list_reports(self) -> List[ScanReport]:
         return self.reports
+
+    def get_report(self, report_id: str) -> ScanReport | None:
+        return next((r for r in self.reports if r.id == report_id), None)
 
     def upsert_monitored_target(self, target: MonitoredTarget) -> MonitoredTarget:
         self.monitored_targets[target.id] = target

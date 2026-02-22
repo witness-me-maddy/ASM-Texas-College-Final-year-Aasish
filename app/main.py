@@ -95,6 +95,15 @@ def register_monitor_target(payload: MonitorRequest):
     return MonitorResponse(target=target)
 
 
+
+
+@app.get("/api/reports/{report_id}")
+def get_report(report_id: str):
+    report = repo.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return {"report": report}
+
 @app.get("/api/assets/{asset_id}")
 def get_asset(asset_id: str):
     asset = repo.get_asset(asset_id)

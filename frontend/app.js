@@ -117,6 +117,11 @@ function drawDonutFromReports(reports) {
 function renderReports(reports) {
   latestReports = reports;
   reportRows.innerHTML = '';
+  if (reports.length === 0) {
+    reportRows.innerHTML = '<tr><td colspan="7">No reports yet. Run a scan to generate comprehensive intelligence.</td></tr>';
+    return;
+  }
+
   reports.forEach((r) => {
     const tr = document.createElement('tr');
     tr.className = 'clickable-row';
@@ -140,6 +145,12 @@ function renderTopFindings(reports) {
   const ex = reports.flatMap((r) => (r.top_exposures || []).map((e) => ({ ...e, target: r.target_host })))
     .sort((a, b) => b.epss_score - a.epss_score)
     .slice(0, 10);
+
+  if (ex.length === 0) {
+    topFindings.innerHTML = '<li><div>No EPSS findings available yet.</div></li>';
+    return;
+  }
+
   ex.forEach((e) => {
     const b = riskBand(e.epss_score);
     const li = document.createElement('li');
@@ -157,8 +168,10 @@ function fillList(el, values) {
   });
 }
 
-function renderTargetDetails(reportId) {
-  const report = latestReports.find((r) => r.id === reportId);
+async function renderTargetDetails(reportId) {
+  let report = latestReports.find((r) => r.id === reportId);
+  const live = await safeFetch(`${API_BASE}/api/reports/${encodeURIComponent(reportId)}`);
+  if (live && live.report) report = live.report;
   if (!report) return;
 
   detailEmpty.classList.add('hidden');
@@ -219,7 +232,12 @@ async function refresh(query = '') {
   renderTopFindings(reports);
   drawTrend();
   drawDonutFromReports(reports);
-  if (reports.length > 0) renderTargetDetails(reports[0].id);
+  if (reports.length > 0) {
+    renderTargetDetails(reports[0].id);
+  } else {
+    detailView.classList.add('hidden');
+    detailEmpty.classList.remove('hidden');
+  }
 
   if (automationData && automationData.automation) {
     const a = automationData.automation;
