@@ -12,19 +12,19 @@ def test_summary_endpoint_uses_epss_framework():
     assert payload['risk_framework'] == 'EPSS-first'
 
 
-def test_scan_collects_full_surface_details():
+def test_scan_collects_comprehensive_target_intelligence():
     response = client.post('/api/scan', json={'website_url': 'https://scanme.example.com'})
     assert response.status_code == 200
-    payload = response.json()
-    report = payload['report']
+    report = response.json()['report']
+
     assert report['status'] == 'completed'
     assert report['scanned_port_range'] == '1-65535'
-    assert len(report['open_ports']) >= 8
-    assert 'Nmap' in report['tools_executed']
-    assert 'Masscan' in report['tools_executed']
-    assert 'Subfinder' in report['tools_executed']
-    assert 'Assetfinder' in report['tools_executed']
-    assert 'Nikto' in report['tools_executed']
+    assert len(report['open_ports']) >= 10
+    for tool in ['Nmap', 'Masscan', 'Subfinder', 'Assetfinder', 'Nikto', 'Nuclei', 'Amass', 'httpx', 'Naabu', 'Wafw00f']:
+        assert tool in report['tools_executed']
+    assert len(report['discovered_subdomains']) >= 5
+    assert len(report['discovered_urls']) >= 5
+    assert report['waf_detected'] is not None
 
 
 def test_register_monitor_target_and_get_automation_status():

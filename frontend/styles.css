@@ -4,7 +4,6 @@
   --line: #22262c;
   --text: #f2f4f8;
   --muted: #a3adb8;
-  --green: #2ecc71;
   --yellow: #f1c40f;
   --orange: #ff8c1a;
   --red: #ef3b3b;
@@ -33,6 +32,7 @@ button { cursor: pointer; background: #1b4ed8; border-color: #3c63db; font-weigh
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
 h3 { margin: 0 0 8px; font-size: 20px; }
+h4 { margin: 0 0 6px; font-size: 13px; color: #c2ccdd; }
 .row-between { display: flex; justify-content: space-between; align-items: center; }
 .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 8px; color: #d4dae3; font-size: 12px; }
 .legend .dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 6px; }
@@ -43,6 +43,8 @@ h3 { margin: 0 0 8px; font-size: 20px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border-bottom: 1px solid var(--line); padding: 9px 7px; text-align: left; font-size: 12px; vertical-align: top; }
 th { color: #d0d6e0; font-size: 13px; }
+.clickable-row { cursor: pointer; }
+.clickable-row:hover { background: rgba(58,123,253,.08); }
 .badge { display: inline-block; border-radius: 999px; padding: 3px 9px; font-size: 11px; font-weight: 700; }
 .bg-Low { background: rgba(58,123,253,.18); color: #8ab2ff; }
 .bg-Medium { background: rgba(241,196,15,.18); color: #ffd95a; }
@@ -50,9 +52,16 @@ th { color: #d0d6e0; font-size: 13px; }
 .bg-Critical { background: rgba(239,59,59,.18); color: #ff8f8f; }
 .findings { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .findings li { border: 1px solid #2b3038; border-radius: 10px; padding: 10px; display: flex; justify-content: space-between; gap: 10px; }
+.detail-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.detail-card { border: 1px solid var(--line); background: #0a101a; border-radius: 10px; padding: 10px; }
+.detail-card p { margin: 0; font-size: 12px; line-height: 1.5; }
+.detail-card ul { margin: 0; padding-left: 16px; font-size: 12px; }
+.detail-card.wide { grid-column: span 2; }
+.hidden { display: none; }
 @media (max-width: 1200px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { display: none; }
-  .scan-strip { grid-template-columns: 1fr; }
-  .grid-2 { grid-template-columns: 1fr; }
+  .scan-strip, .scan-strip-main { grid-template-columns: 1fr; }
+  .grid-2, .detail-grid { grid-template-columns: 1fr; }
+  .detail-card.wide { grid-column: auto; }
 }

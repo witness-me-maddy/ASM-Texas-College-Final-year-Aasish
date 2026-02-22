@@ -136,6 +136,10 @@ class ScanReport(BaseModel):
     discovered_subdomains: List[str] = Field(default_factory=list)
     discovered_ips: List[str] = Field(default_factory=list)
     discovered_technologies: List[str] = Field(default_factory=list)
+    discovered_urls: List[str] = Field(default_factory=list)
+    discovered_emails: List[str] = Field(default_factory=list)
+    discovered_cloud_assets: List[str] = Field(default_factory=list)
+    waf_detected: Optional[str] = None
     top_exposures: List[Exposure] = Field(default_factory=list)
 
 

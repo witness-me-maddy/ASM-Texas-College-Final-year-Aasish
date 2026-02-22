@@ -5,7 +5,7 @@ An enterprise-ready ASM system with:
 - **One-click full URL scan** (no port selection required by user).
 - **Full port sweep simulation (1-65535)** and open service discovery.
 - **Continuous automated scanning** for monitored targets.
-- **Toolchain-integrated findings** from Nmap, Subfinder, Masscan, Nikto, Assetfinder, and Nuclei.
+- **Toolchain-integrated findings** from Nmap, Subfinder, Masscan, Nikto, Assetfinder, Nuclei, Amass, httpx, Naabu, and Wafw00f.
 - **Position-aware asset visibility** (city/country + coordinates).
 
 ## Why EPSS over CVSS
@@ -17,6 +17,7 @@ This platform prioritizes vulnerabilities using **Exploit Prediction Scoring Sys
 - Target monitoring registration (`POST /api/monitor-targets`).
 - Automation visibility (`GET /api/automation`).
 - Historical report listing with position + open ports + tools + EPSS-ranked vulnerabilities (`GET /api/reports`).
+- Clickable scan history rows in frontend to open deep target intelligence (URLs, emails, cloud assets, WAF, technologies).
 - Asset inventory with location, open services, exposures, and EPSS risk bands.
 
 ## API Endpoints

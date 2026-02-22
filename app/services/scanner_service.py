@@ -45,7 +45,18 @@ class ASMScannerService:
         parsed = urlparse(str(payload.website_url))
         host = parsed.hostname or str(payload.website_url)
 
-        tools_executed = ["Nmap", "Masscan", "Subfinder", "Assetfinder", "Nikto", "Nuclei"]
+        tools_executed = [
+            "Nmap",
+            "Masscan",
+            "Subfinder",
+            "Assetfinder",
+            "Nikto",
+            "Nuclei",
+            "Amass",
+            "httpx",
+            "Naabu",
+            "Wafw00f",
+        ]
         findings = self._simulate_tool_findings(host)
         exposures = self.adapter.normalize(findings)
         position = self._simulate_position(host)
@@ -53,6 +64,10 @@ class ASMScannerService:
         subdomains = self._simulate_subdomains(host)
         ips = self._simulate_ips(host)
         technologies = self._simulate_technologies(host)
+        urls = self._simulate_urls(host)
+        emails = self._simulate_emails(host)
+        cloud_assets = self._simulate_cloud_assets(host)
+        waf = self._simulate_waf(host)
 
         asset = self.repository.upsert_asset(
             name=host,
@@ -66,7 +81,7 @@ class ASMScannerService:
 
         max_epss = max((e.epss_score for e in exposures), default=0.0)
         max_percentile = max((e.epss_percentile for e in exposures), default=0.0)
-        top_exposures = sorted(exposures, key=lambda e: e.epss_score, reverse=True)[:5]
+        top_exposures = sorted(exposures, key=lambda e: e.epss_score, reverse=True)[:8]
 
         report = ScanReport(
             id=f"scan-{uuid4()}",
@@ -86,6 +101,10 @@ class ASMScannerService:
             discovered_subdomains=subdomains,
             discovered_ips=ips,
             discovered_technologies=technologies,
+            discovered_urls=urls,
+            discovered_emails=emails,
+            discovered_cloud_assets=cloud_assets,
+            waf_detected=waf,
             top_exposures=top_exposures,
         )
         self.repository.add_report(report)
@@ -168,25 +187,45 @@ class ASMScannerService:
             OpenPort(port=6379, protocol="tcp", service="redis"),
             OpenPort(port=8080, protocol="tcp", service="http-alt"),
             OpenPort(port=8443, protocol="tcp", service="https-alt"),
+            OpenPort(port=9200, protocol="tcp", service="elasticsearch"),
+            OpenPort(port=27017, protocol="tcp", service="mongodb"),
         ]
         seed = int(hashlib.sha256((host + "ports").encode("utf-8")).hexdigest()[:8], 16)
-        count = 8 + (seed % 5)
+        count = 12 + (seed % 4)
         return [port_profiles[(seed + i) % len(port_profiles)] for i in range(count)]
 
     def _simulate_subdomains(self, host: str) -> list[str]:
-        labels = ["www", "api", "dev", "staging", "vpn", "mail", "cdn", "auth"]
+        labels = ["www", "api", "dev", "staging", "vpn", "mail", "cdn", "auth", "status", "beta"]
         seed = int(hashlib.sha256((host + "subs").encode("utf-8")).hexdigest()[:8], 16)
-        count = 4 + (seed % 3)
+        count = 6 + (seed % 5)
         return [f"{labels[(seed + i) % len(labels)]}.{host}" for i in range(count)]
 
     def _simulate_ips(self, host: str) -> list[str]:
         seed = int(hashlib.sha256((host + "ips").encode("utf-8")).hexdigest()[:8], 16)
-        return [f"203.0.113.{(seed % 200) + i + 1}" for i in range(3)]
+        return [f"203.0.113.{(seed % 180) + i + 1}" for i in range(5)]
 
     def _simulate_technologies(self, host: str) -> list[str]:
-        tech = ["Nginx", "Cloudflare", "React", "FastAPI", "PostgreSQL", "Redis"]
+        tech = ["Nginx", "Cloudflare", "React", "FastAPI", "PostgreSQL", "Redis", "Docker", "Kubernetes"]
         seed = int(hashlib.sha256((host + "tech").encode("utf-8")).hexdigest()[:8], 16)
-        return [tech[(seed + i) % len(tech)] for i in range(4)]
+        return [tech[(seed + i) % len(tech)] for i in range(6)]
+
+    def _simulate_urls(self, host: str) -> list[str]:
+        paths = ["/", "/login", "/admin", "/api/v1/users", "/health", "/docs", "/backup.zip", "/debug"]
+        return [f"https://{host}{path}" for path in paths]
+
+    def _simulate_emails(self, host: str) -> list[str]:
+        users = ["security", "admin", "support", "devops"]
+        return [f"{u}@{host}" for u in users]
+
+    def _simulate_cloud_assets(self, host: str) -> list[str]:
+        seed = int(hashlib.sha256((host + "cloud").encode("utf-8")).hexdigest()[:8], 16)
+        clouds = ["aws-s3-public-bucket", "azure-blob-storage", "gcp-storage-bucket", "cloudfront-distribution"]
+        return [clouds[(seed + i) % len(clouds)] for i in range(3)]
+
+    def _simulate_waf(self, host: str) -> str:
+        wafs = ["Cloudflare WAF", "AWS WAF", "Akamai Kona", "Imperva", "None detected"]
+        seed = int(hashlib.sha256((host + "waf").encode("utf-8")).hexdigest()[:8], 16)
+        return wafs[seed % len(wafs)]
 
     def _simulate_tool_findings(self, host: str) -> list[ToolFinding]:
         tool_cves = [
@@ -196,11 +235,15 @@ class ASMScannerService:
             ("Nuclei", "Exposed admin/debug endpoint", "CVE-2023-20198", "critical"),
             ("Subfinder", "Sensitive subdomain takeover candidate", "CVE-2021-41773", "medium"),
             ("Assetfinder", "Leaked legacy host with weak TLS", "CVE-2023-3446", "high"),
+            ("Amass", "Exposed stale DNS record", "CVE-2023-50387", "medium"),
+            ("httpx", "Deprecated TLS protocol enabled", "CVE-2022-0778", "high"),
+            ("Naabu", "Unexpected management interface port exposed", "CVE-2023-1389", "critical"),
+            ("Wafw00f", "WAF bypass indicator discovered", "CVE-2020-5902", "critical"),
         ]
 
         seed = int(hashlib.sha256(host.encode("utf-8")).hexdigest()[:8], 16)
         offset = seed % len(tool_cves)
-        selected = [tool_cves[(offset + i) % len(tool_cves)] for i in range(5)]
+        selected = [tool_cves[(offset + i) % len(tool_cves)] for i in range(8)]
 
         findings: list[ToolFinding] = []
         for idx, (tool, title, cve, sev) in enumerate(selected, start=1):

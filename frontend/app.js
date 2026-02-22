@@ -1,7 +1,6 @@
 const API_BASE = window.location.origin;
 
 const reportRows = document.getElementById('reportRows');
-const assetRows = document.getElementById('assetRows');
 const topFindings = document.getElementById('topFindings');
 const riskLegend = document.getElementById('riskLegend');
 const assetLegend = document.getElementById('assetLegend');
@@ -18,6 +17,26 @@ const monitorRows = document.getElementById('monitorRows');
 const monitorUrlInput = document.getElementById('monitorUrlInput');
 const addMonitorBtn = document.getElementById('addMonitorBtn');
 const automationState = document.getElementById('automationState');
+
+const detailEmpty = document.getElementById('detailEmpty');
+const detailView = document.getElementById('detailView');
+const dTarget = document.getElementById('dTarget');
+const dWaf = document.getElementById('dWaf');
+const dPortRange = document.getElementById('dPortRange');
+const dTopEpss = document.getElementById('dTopEpss');
+const dTools = document.getElementById('dTools');
+const dPorts = document.getElementById('dPorts');
+
+const listTargets = {
+  subs: document.getElementById('dSubs'),
+  ips: document.getElementById('dIps'),
+  tech: document.getElementById('dTech'),
+  urls: document.getElementById('dUrls'),
+  emails: document.getElementById('dEmails'),
+  cloud: document.getElementById('dCloud'),
+};
+
+let latestReports = [];
 
 function riskBand(score) {
   if (score >= 0.7) return 'Critical';
@@ -66,8 +85,8 @@ function drawTrend() {
   assetLegend.innerHTML = series.map((s) => `<span><i class="dot" style="background:${s.color}"></i>${s.key}</span>`).join('');
 }
 
-function drawDonutFromAssets(assets) {
-  const exposures = assets.flatMap((a) => a.exposures || []).filter((e) => e.status === 'open');
+function drawDonutFromReports(reports) {
+  const exposures = reports.flatMap((r) => r.top_exposures || []);
   const buckets = { Critical: 0, High: 0, Medium: 0, Low: 0 };
   exposures.forEach((e) => { buckets[riskBand(e.epss_score)] += 1; });
   const data = [
@@ -95,24 +114,14 @@ function drawDonutFromAssets(assets) {
   riskLegend.innerHTML = data.map((d) => `<span><i class="dot" style="background:${d.color}"></i>${d.label} ${d.value}</span>`).join('');
 }
 
-function renderAssets(rows) {
-  assetRows.innerHTML = '';
-  rows.forEach((item) => {
-    const asset = item.asset || item;
-    const ex = (asset.exposures || []).filter((e) => e.status === 'open');
-    const top = ex.reduce((m, e) => Math.max(m, e.epss_score), 0);
-    const band = riskBand(top);
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${asset.name}</td><td>${fmtPosition(asset.position)}</td><td>${fmtPorts(asset.open_ports)}</td><td>${ex.length}</td><td>${top.toFixed(2)}</td><td><span class="badge bg-${band}">${band}</span></td>`;
-    assetRows.append(tr);
-  });
-}
-
 function renderReports(reports) {
+  latestReports = reports;
   reportRows.innerHTML = '';
   reports.forEach((r) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.target_host || r.website_url}<div class="muted">subs: ${(r.discovered_subdomains || []).length} • ips: ${(r.discovered_ips || []).length}</div></td><td>${fmtPosition(r.target_position)}</td><td>${fmtPorts(r.open_ports)}</td><td>${(r.tools_executed || []).join(', ')}</td><td>${r.exposures_discovered}</td><td>${Number(r.max_epss_score).toFixed(2)}</td><td>${new Date(r.completed_at).toLocaleString()}</td>`;
+    tr.className = 'clickable-row';
+    tr.innerHTML = `<td>${r.target_host || r.website_url}<div class="muted">subs: ${(r.discovered_subdomains || []).length} • ips: ${(r.discovered_ips || []).length}</div></td><td>${fmtPosition(r.target_position)}</td><td>${(r.open_ports || []).length} ports</td><td>${(r.tools_executed || []).join(', ')}</td><td>${r.exposures_discovered}</td><td>${Number(r.max_epss_score).toFixed(2)}</td><td>${new Date(r.completed_at).toLocaleString()}</td>`;
+    tr.addEventListener('click', () => renderTargetDetails(r.id));
     reportRows.append(tr);
   });
 }
@@ -126,18 +135,48 @@ function renderMonitors(targets) {
   });
 }
 
-function renderTopFindings(assets) {
+function renderTopFindings(reports) {
   topFindings.innerHTML = '';
-  const ex = assets.flatMap((a) => (a.exposures || []).map((e) => ({ ...e, asset: a.name })))
-    .filter((e) => e.status === 'open')
+  const ex = reports.flatMap((r) => (r.top_exposures || []).map((e) => ({ ...e, target: r.target_host })))
     .sort((a, b) => b.epss_score - a.epss_score)
-    .slice(0, 6);
+    .slice(0, 10);
   ex.forEach((e) => {
     const b = riskBand(e.epss_score);
     const li = document.createElement('li');
-    li.innerHTML = `<div><strong>${e.title}</strong><div class="muted">${e.asset} • ${e.source_tool} • ${e.cve || 'No CVE'}</div></div><span class="badge bg-${b}">EPSS ${(e.epss_score * 100).toFixed(1)}%</span>`;
+    li.innerHTML = `<div><strong>${e.title}</strong><div class="muted">${e.target} • ${e.source_tool} • ${e.cve || 'No CVE'}</div></div><span class="badge bg-${b}">EPSS ${(e.epss_score * 100).toFixed(1)}%</span>`;
     topFindings.append(li);
   });
+}
+
+function fillList(el, values) {
+  el.innerHTML = '';
+  values.slice(0, 10).forEach((v) => {
+    const li = document.createElement('li');
+    li.textContent = v;
+    el.append(li);
+  });
+}
+
+function renderTargetDetails(reportId) {
+  const report = latestReports.find((r) => r.id === reportId);
+  if (!report) return;
+
+  detailEmpty.classList.add('hidden');
+  detailView.classList.remove('hidden');
+
+  dTarget.textContent = `${report.target_host} (${fmtPosition(report.target_position)})`;
+  dWaf.textContent = report.waf_detected || 'Unknown';
+  dPortRange.textContent = `${report.scanned_port_range} | ${(report.open_ports || []).length} open ports discovered`;
+  dTopEpss.textContent = `${(report.max_epss_score * 100).toFixed(1)}% (${(report.max_epss_percentile * 100).toFixed(1)} percentile)`;
+  dTools.textContent = (report.tools_executed || []).join(', ');
+  dPorts.textContent = fmtPorts(report.open_ports || []);
+
+  fillList(listTargets.subs, report.discovered_subdomains || []);
+  fillList(listTargets.ips, report.discovered_ips || []);
+  fillList(listTargets.tech, report.discovered_technologies || []);
+  fillList(listTargets.urls, report.discovered_urls || []);
+  fillList(listTargets.emails, report.discovered_emails || []);
+  fillList(listTargets.cloud, report.discovered_cloud_assets || []);
 }
 
 async function runScan(url) {
@@ -158,27 +197,29 @@ async function addMonitorTarget() {
 }
 
 async function refresh(query = '') {
-  const [summary, assetsData, reportsData, monitorData, automationData] = await Promise.all([
+  const [summary, reportsData, monitorData, automationData] = await Promise.all([
     safeFetch(`${API_BASE}/api/summary`),
-    safeFetch(`${API_BASE}${query ? `/api/search?query=${encodeURIComponent(query)}` : '/api/assets'}`),
     safeFetch(`${API_BASE}/api/reports`),
     safeFetch(`${API_BASE}/api/monitor-targets`),
     safeFetch(`${API_BASE}/api/automation`),
   ]);
 
-  if (!assetsData) {
+  if (!reportsData) {
     scanStatus.textContent = 'Backend unavailable. Start FastAPI server.';
     return;
   }
 
-  const rows = assetsData.assets || assetsData;
-  const assets = rows.map((r) => r.asset || r);
-  renderAssets(rows);
-  renderReports((reportsData && reportsData.reports) || []);
+  let reports = reportsData.reports || [];
+  if (query) {
+    reports = reports.filter((r) => (r.target_host || '').toLowerCase().includes(query.toLowerCase()));
+  }
+
+  renderReports(reports);
   renderMonitors((monitorData && monitorData.targets) || []);
-  renderTopFindings(assets);
+  renderTopFindings(reports);
   drawTrend();
-  drawDonutFromAssets(assets);
+  drawDonutFromReports(reports);
+  if (reports.length > 0) renderTargetDetails(reports[0].id);
 
   if (automationData && automationData.automation) {
     const a = automationData.automation;
@@ -194,10 +235,10 @@ async function refresh(query = '') {
 scanNowBtn.addEventListener('click', async () => {
   const url = scanUrlInput.value.trim();
   if (!url) { scanStatus.textContent = 'Please enter website URL.'; return; }
-  scanStatus.textContent = 'Running full scan...';
+  scanStatus.textContent = 'Running full scan across all ports and recon tools...';
   const result = await runScan(url);
   if (!result) { scanStatus.textContent = 'Scan failed. API unavailable.'; return; }
-  scanStatus.textContent = `Scan completed for ${result.report.target_host}. Position, ports, and vulnerabilities updated.`;
+  scanStatus.textContent = `Scan completed for ${result.report.target_host}. Click target rows for deep intelligence.`;
   await refresh(searchInput.value.trim());
 });
 
