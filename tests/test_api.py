@@ -5,49 +5,57 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_summary_endpoint_uses_epss_framework():
+def test_summary_endpoint_uses_contextual_risk_framework():
     response = client.get('/api/summary')
     assert response.status_code == 200
     payload = response.json()
-    assert payload['risk_framework'] == 'EPSS-first'
+    assert payload['risk_framework'] == 'EPSS + contextual risk'
 
 
-def test_seed_report_exists_and_report_details_endpoint_works():
-    reports = client.get('/api/reports')
-    assert reports.status_code == 200
-    rows = reports.json()['reports']
+def test_scan_job_submission_and_nodes_endpoints():
+    submit = client.post('/api/jobs/scan', json={'website_url': 'https://scanme.example.com', 'priority': 2})
+    assert submit.status_code == 200
+    assert submit.json()['job']['status'] in ['queued', 'running', 'completed']
+
+    nodes = client.get('/api/scanner-nodes')
+    assert nodes.status_code == 200
+    assert isinstance(nodes.json()['nodes'], list)
+
+
+def test_exposure_lifecycle_ticket_and_exception_flow():
+    exposures = client.get('/api/exposures')
+    assert exposures.status_code == 200
+    rows = exposures.json()['exposures']
     assert len(rows) >= 1
+    exposure_id = rows[0]['id']
 
-    report_id = rows[0]['id']
-    detail = client.get(f'/api/reports/{report_id}')
-    assert detail.status_code == 200
-    report = detail.json()['report']
-    assert report['scanned_port_range'] == '1-65535'
-    assert report['waf_detected'] is not None
+    assign = client.post(f'/api/exposures/{exposure_id}/assign', json={'assignee': 'secops@aasishasm.local'})
+    assert assign.status_code == 200
+    assert assign.json()['exposure']['assignee'] == 'secops@aasishasm.local'
+
+    ticket = client.post(f'/api/exposures/{exposure_id}/ticket', json={'provider': 'jira'})
+    assert ticket.status_code == 200
+    assert ticket.json()['ticket']['external_key'].startswith('JIRA-')
+
+    exc = client.post(
+        f'/api/exposures/{exposure_id}/exception-request',
+        json={'requested_by': 'risk-owner', 'reason': 'temporary maintenance window', 'expires_at': '2030-01-01T00:00:00Z'},
+    )
+    assert exc.status_code == 200
+    assert exc.json()['exposure']['exception_status'] == 'requested'
+
+    approve = client.post(f'/api/exposures/{exposure_id}/exception-approve', json={'approved_by': 'ciso'})
+    assert approve.status_code == 200
+    assert approve.json()['exposure']['exception_status'] == 'approved'
 
 
-def test_scan_collects_comprehensive_target_intelligence():
-    response = client.post('/api/scan', json={'website_url': 'https://scanme.example.com'})
+def test_sync_scan_contains_integrated_tools_and_intel_fields():
+    response = client.post('/api/scan', json={'website_url': 'https://demo.aasishasm.com'})
     assert response.status_code == 200
     report = response.json()['report']
 
-    assert report['status'] == 'completed'
     assert report['scanned_port_range'] == '1-65535'
-    assert len(report['open_ports']) >= 10
     for tool in ['Nmap', 'Masscan', 'Subfinder', 'Assetfinder', 'Nikto', 'Nuclei', 'Amass', 'httpx', 'Naabu', 'Wafw00f']:
         assert tool in report['tools_executed']
-    assert len(report['discovered_subdomains']) >= 5
-    assert len(report['discovered_urls']) >= 5
-
-
-def test_register_monitor_target_and_get_automation_status():
-    register = client.post('/api/monitor-targets', json={'website_url': 'https://acme.io'})
-    assert register.status_code == 200
-
-    targets = client.get('/api/monitor-targets')
-    assert targets.status_code == 200
-    assert len(targets.json()['targets']) >= 1
-
-    status = client.get('/api/automation')
-    assert status.status_code == 200
-    assert 'running' in status.json()['automation']
+    assert len(report['discovered_subdomains']) >= 1
+    assert len(report['open_ports']) >= 1

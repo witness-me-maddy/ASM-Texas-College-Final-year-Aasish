@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from uuid import uuid4
 
@@ -13,9 +13,12 @@ from app.models import (
     GeoPosition,
     MonitoredTarget,
     OpenPort,
+    ScanJob,
     ScanReport,
     ScanStatus,
+    ScannerNode,
     Summary,
+    TicketRecord,
 )
 
 
@@ -24,54 +27,44 @@ class InMemoryRepository:
         self.assets: Dict[str, Asset] = {}
         self.reports: List[ScanReport] = []
         self.monitored_targets: Dict[str, MonitoredTarget] = {}
+        self.jobs: Dict[str, ScanJob] = {}
+        self.nodes: Dict[str, ScannerNode] = {}
+        self.tickets: Dict[str, TicketRecord] = {}
         self.last_automation_cycle_at: datetime | None = None
         self._seed()
 
     def _seed(self) -> None:
         now = datetime.now(timezone.utc)
-        base_exposure = Exposure(
+        exposure = Exposure(
             id="exp-1",
             title="Outdated OpenSSL package",
             description="Detected by vulnerability scanner",
             cve="CVE-2023-0286",
             epss_score=0.62,
             epss_percentile=0.93,
+            risk_score=0.76,
             source_tool="Nessus",
             discovered_at=now,
             status=ExposureStatus.open,
+            fingerprint="portal.texascollege.edu|cve-2023-0286",
+            sla_due_at=now + timedelta(days=14),
         )
 
-        self.assets = {
-            "asset-1": Asset(
-                id="asset-1",
-                name="portal.texascollege.edu",
-                type=AssetType.web_app,
-                owner="IT Security",
-                business_unit="Student Services",
-                internet_exposed=True,
-                criticality=5,
-                tags=["production", "student-facing"],
-                position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
-                open_ports=[
-                    OpenPort(port=443, protocol="tcp", service="https"),
-                    OpenPort(port=22, protocol="tcp", service="ssh"),
-                    OpenPort(port=8443, protocol="tcp", service="https-alt"),
-                ],
-                exposures=[base_exposure],
-            ),
-            "asset-2": Asset(
-                id="asset-2",
-                name="api.texascollege.edu",
-                type=AssetType.domain,
-                owner="Engineering",
-                business_unit="Digital Learning",
-                internet_exposed=True,
-                criticality=4,
-                tags=["api", "production"],
-                open_ports=[OpenPort(port=443, protocol="tcp", service="https")],
-                exposures=[],
-            ),
-        }
+        asset = Asset(
+            id="asset-1",
+            name="portal.texascollege.edu",
+            type=AssetType.web_app,
+            owner="IT Security",
+            business_unit="Student Services",
+            internet_exposed=True,
+            criticality=5,
+            tags=["production", "student-facing"],
+            position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
+            open_ports=[OpenPort(port=443, protocol="tcp", service="https"), OpenPort(port=22, protocol="tcp", service="ssh")],
+            exposures=[exposure],
+        )
+        exposure.asset_id = asset.id
+        self.assets = {asset.id: asset}
 
         self.reports = [
             ScanReport(
@@ -87,20 +80,16 @@ class InMemoryRepository:
                 exposures_discovered=1,
                 max_epss_score=0.62,
                 max_epss_percentile=0.93,
-                target_position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
-                open_ports=[
-                    OpenPort(port=443, protocol="tcp", service="https"),
-                    OpenPort(port=22, protocol="tcp", service="ssh"),
-                    OpenPort(port=8443, protocol="tcp", service="https-alt"),
-                ],
+                target_position=asset.position,
+                open_ports=asset.open_ports,
                 discovered_subdomains=["www.portal.texascollege.edu", "api.portal.texascollege.edu"],
                 discovered_ips=["203.0.113.10", "203.0.113.11"],
                 discovered_technologies=["Nginx", "React", "FastAPI"],
-                discovered_urls=["https://portal.texascollege.edu/login", "https://portal.texascollege.edu/admin"],
+                discovered_urls=["https://portal.texascollege.edu/login"],
                 discovered_emails=["security@texascollege.edu"],
                 discovered_cloud_assets=["aws-s3-public-bucket"],
                 waf_detected="Cloudflare WAF",
-                top_exposures=[base_exposure],
+                top_exposures=[exposure],
             )
         ]
 
@@ -130,11 +119,35 @@ class InMemoryRepository:
         self.assets[asset.id] = asset
         return asset
 
-    def add_exposures(self, asset_id: str, exposures: list[Exposure]) -> int:
+    def _find_duplicate(self, asset: Asset, exposure: Exposure) -> Exposure | None:
+        return next((e for e in asset.exposures if e.fingerprint and e.fingerprint == exposure.fingerprint), None)
+
+    def add_exposures(self, asset_id: str, exposures: list[Exposure]) -> tuple[int, int]:
         asset = self.assets[asset_id]
-        before = len(asset.exposures)
-        asset.exposures.extend(exposures)
-        return len(asset.exposures) - before
+        created = 0
+        deduped = 0
+        for exposure in exposures:
+            exposure.asset_id = asset_id
+            if not exposure.fingerprint:
+                exposure.fingerprint = f"{asset.name}|{(exposure.cve or exposure.title).lower()}"
+            duplicate = self._find_duplicate(asset, exposure)
+            if duplicate:
+                deduped += 1
+                exposure.duplicate_of = duplicate.id
+                continue
+            asset.exposures.append(exposure)
+            created += 1
+        return created, deduped
+
+    def list_exposures(self) -> list[Exposure]:
+        return [e for a in self.assets.values() for e in a.exposures]
+
+    def get_exposure(self, exposure_id: str) -> Exposure | None:
+        for asset in self.assets.values():
+            for exposure in asset.exposures:
+                if exposure.id == exposure_id:
+                    return exposure
+        return None
 
     def add_report(self, report: ScanReport) -> None:
         self.reports.insert(0, report)
@@ -152,8 +165,31 @@ class InMemoryRepository:
     def list_monitored_targets(self) -> List[MonitoredTarget]:
         return list(self.monitored_targets.values())
 
+    def add_job(self, job: ScanJob) -> ScanJob:
+        self.jobs[job.id] = job
+        return job
+
+    def update_job(self, job: ScanJob) -> None:
+        self.jobs[job.id] = job
+
+    def get_job(self, job_id: str) -> ScanJob | None:
+        return self.jobs.get(job_id)
+
+    def list_jobs(self) -> list[ScanJob]:
+        return sorted(self.jobs.values(), key=lambda j: j.created_at, reverse=True)
+
+    def upsert_node(self, node: ScannerNode) -> None:
+        self.nodes[node.id] = node
+
+    def list_nodes(self) -> list[ScannerNode]:
+        return list(self.nodes.values())
+
+    def add_ticket(self, ticket: TicketRecord) -> TicketRecord:
+        self.tickets[ticket.id] = ticket
+        return ticket
+
     def summary(self) -> Summary:
-        exposures = [e for a in self.assets.values() for e in a.exposures]
+        exposures = self.list_exposures()
         open_exposures = [e for e in exposures if e.status == ExposureStatus.open]
         high_risk = [e for e in open_exposures if e.epss_score >= 0.4]
 
@@ -174,7 +210,5 @@ class InMemoryRepository:
     def group_by_business_unit(self) -> dict[str, int]:
         buckets = defaultdict(int)
         for asset in self.assets.values():
-            buckets[asset.business_unit] += len(
-                [e for e in asset.exposures if e.status == ExposureStatus.open]
-            )
+            buckets[asset.business_unit] += len([e for e in asset.exposures if e.status == ExposureStatus.open])
         return dict(buckets)

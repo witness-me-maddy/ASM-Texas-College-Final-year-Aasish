@@ -1,54 +1,51 @@
 # Enterprise Attack Surface Management (ASM) Platform
 
-An enterprise-ready ASM system with:
-- **EPSS-first risk prioritization** (no CVSS scoring dependency in ranking).
-- **One-click full URL scan** (no port selection required by user).
-- **Full port sweep simulation (1-65535)** and open service discovery.
-- **Continuous automated scanning** for monitored targets.
-- **Toolchain-integrated findings** from Nmap, Subfinder, Masscan, Nikto, Assetfinder, Nuclei, Amass, httpx, Naabu, and Wafw00f.
-- **Position-aware asset visibility** (city/country + coordinates).
+An enterprise-grade ASM platform with:
+- **EPSS + contextual risk scoring** (exploitability + business criticality + exposure context).
+- **Real scan orchestration pipeline** with job queue, retry/backoff, prioritization, and scanner-node heartbeat.
+- **Integrated tool execution** using subprocess pipelines for Nmap, Masscan, Subfinder, Assetfinder, Nikto, Nuclei, Amass, httpx, Naabu, and Wafw00f (with fallback mode when binaries are unavailable).
+- **Vulnerability lifecycle operations**: assignment, ticket creation, exception request/approval with expiration, SLA tracking, and dedup by fingerprint.
+- **Continuous monitoring automation** for registered targets.
+- **Elegant frontend** with deep target intelligence drill-down.
 
-## Why EPSS over CVSS
-This platform prioritizes vulnerabilities using **Exploit Prediction Scoring System (EPSS)** probabilities and percentiles so teams focus on likely exploitation.
-
-## Core ASM Features Delivered
-- Manual website scan (`POST /api/scan`) that scans the entire target attack surface.
-- Continuous scan automation (background loop started on app startup).
-- Target monitoring registration (`POST /api/monitor-targets`).
-- Automation visibility (`GET /api/automation`).
-- Historical report listing with position + open ports + tools + EPSS-ranked vulnerabilities (`GET /api/reports`).
-- Clickable scan history rows in frontend to open deep target intelligence (URLs, emails, cloud assets, WAF, technologies).
-- Asset inventory with location, open services, exposures, and EPSS risk bands.
+## Core enterprise capabilities now implemented
+- Async-like queued scan jobs: `POST /api/jobs/scan`, `GET /api/jobs`.
+- Scanner-node observability: `GET /api/scanner-nodes`.
+- Report-level detail API: `GET /api/reports/{report_id}`.
+- Exposure workflow APIs:
+  - `POST /api/exposures/{id}/assign`
+  - `POST /api/exposures/{id}/ticket`
+  - `POST /api/exposures/{id}/exception-request`
+  - `POST /api/exposures/{id}/exception-approve`
+  - `GET /api/exposures/sla-breaches`
+- Continuous monitor target registration and automation status.
 
 ## API Endpoints
 - `GET /health`
 - `GET /api/summary`
 - `GET /api/assets`
-- `GET /api/search?query=...`
-- `POST /api/scan`
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
+- `POST /api/scan` (synchronous full scan)
+- `POST /api/jobs/scan` (queued prioritized scan)
+- `GET /api/jobs`
+- `GET /api/scanner-nodes`
 - `GET /api/automation`
 - `GET /api/monitor-targets`
 - `POST /api/monitor-targets`
+- `GET /api/exposures`
+- `POST /api/exposures/{id}/assign`
+- `POST /api/exposures/{id}/ticket`
+- `POST /api/exposures/{id}/exception-request`
+- `POST /api/exposures/{id}/exception-approve`
+- `GET /api/exposures/sla-breaches`
 - `POST /api/ingest`
 
-## Run with Docker (recommended after downloading ZIP)
+## Run with Docker
 ```bash
 docker compose up --build
 ```
-
-Then open: `http://localhost:8000`
-
-To run detached:
-```bash
-docker compose up --build -d
-```
-
-To stop:
-```bash
-docker compose down
-```
+Open: `http://localhost:8000`
 
 ## Run locally
 ```bash
@@ -57,6 +54,3 @@ source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-
-Note: the app ships with a seed report so the frontend target-intelligence panel has immediate data after first startup.

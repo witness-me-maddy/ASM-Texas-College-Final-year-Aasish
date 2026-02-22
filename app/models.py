@@ -21,7 +21,17 @@ class ExposureStatus(str, Enum):
 
 
 class ScanStatus(str, Enum):
+    queued = "queued"
+    running = "running"
     completed = "completed"
+    failed = "failed"
+
+
+class ExceptionStatus(str, Enum):
+    none = "none"
+    requested = "requested"
+    approved = "approved"
+    rejected = "rejected"
 
 
 class GeoPosition(BaseModel):
@@ -45,9 +55,21 @@ class Exposure(BaseModel):
     cve: Optional[str] = None
     epss_score: float = Field(..., ge=0.0, le=1.0)
     epss_percentile: float = Field(..., ge=0.0, le=1.0)
+    risk_score: float = Field(default=0.0, ge=0.0, le=1.0)
     source_tool: str
     discovered_at: datetime
     status: ExposureStatus = ExposureStatus.open
+    asset_id: Optional[str] = None
+    fingerprint: Optional[str] = None
+    duplicate_of: Optional[str] = None
+    assignee: Optional[str] = None
+    ticket_id: Optional[str] = None
+    sla_due_at: Optional[datetime] = None
+    exception_status: ExceptionStatus = ExceptionStatus.none
+    exception_requested_by: Optional[str] = None
+    exception_reason: Optional[str] = None
+    exception_expires_at: Optional[datetime] = None
+    exception_approved_by: Optional[str] = None
 
 
 class Asset(BaseModel):
@@ -99,6 +121,7 @@ class SearchResult(BaseModel):
 
 class ScanRequest(BaseModel):
     website_url: HttpUrl
+    priority: int = Field(default=5, ge=1, le=10)
 
 
 class MonitoredTarget(BaseModel):
@@ -152,3 +175,57 @@ class AutomationStatus(BaseModel):
     running: bool
     monitored_target_count: int
     last_cycle_at: Optional[datetime] = None
+    queued_jobs: int = 0
+
+
+class ScanJob(BaseModel):
+    id: str
+    website_url: HttpUrl
+    priority: int
+    status: ScanStatus
+    attempts: int = 0
+    max_attempts: int = 3
+    next_retry_at: Optional[datetime] = None
+    error: Optional[str] = None
+    created_at: datetime
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    report_id: Optional[str] = None
+
+
+class ScannerNode(BaseModel):
+    id: str
+    status: str
+    last_heartbeat_at: datetime
+    active_job_id: Optional[str] = None
+
+
+class TicketRecord(BaseModel):
+    id: str
+    provider: str
+    external_key: str
+    exposure_id: str
+    status: str
+    created_at: datetime
+
+
+class AssignmentRequest(BaseModel):
+    assignee: str
+
+
+class ExceptionRequest(BaseModel):
+    requested_by: str
+    reason: str
+    expires_at: datetime
+
+
+class ExceptionApprovalRequest(BaseModel):
+    approved_by: str
+
+
+class TicketRequest(BaseModel):
+    provider: str = "jira"
+
+
+class JobSubmissionResponse(BaseModel):
+    job: ScanJob
