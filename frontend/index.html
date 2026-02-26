@@ -9,34 +9,48 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="logo">🛡️ <span>Aasish ASM</span></div>
-      <p class="menu-title">Key features:</p>
+      <div class="brand-block">
+        <div class="logo">🛡️ <span>Aasish ASM</span></div>
+        <p class="subtitle">Enterprise Attack Surface Management</p>
+      </div>
       <nav class="menu">
-        <a class="active" href="#">Dashboard</a>
-        <a href="#scanner">Search</a>
-        <a href="#automation">Continuous Scan</a>
+        <a class="active" href="#">Executive Dashboard</a>
+        <a href="#scanner">Scan Operations</a>
+        <a href="#portfolioReporting">Portfolio Reporting</a>
+        <a href="#assetByUrl">URL Asset Registry</a>
         <a href="#reports">Scan Reports</a>
         <a href="#targetDetails">Target Intelligence</a>
       </nav>
-      <div class="profile">CN&nbsp;&nbsp;<strong>admin</strong></div>
+      <div class="profile">
+        <span class="muted">Signed in as</span>
+        <strong>admin</strong>
+      </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div class="top-left">📊 Enterprise Attack Surface Dashboard</div>
+        <div>
+          <h1>Enterprise Attack Surface Dashboard</h1>
+          <p class="muted">Operational visibility for scan execution, exposure posture, and ownership mapping.</p>
+        </div>
         <div class="top-right">
-          <button id="quickScanBtn" class="quick-btn">⚡ Quick scanning</button>
-          <span id="updatedAt">Statistics updated on --</span>
+          <button id="quickScanBtn" class="quick-btn">⚡ Quick scan</button>
+          <span id="updatedAt" class="timestamp">Statistics updated on --</span>
         </div>
       </header>
 
-      <section class="scan-strip scan-strip-main" id="scanner">
-        <input id="scanUrlInput" type="url" placeholder="Enter website URL (e.g. https://example.com)" />
-        <button id="scanNowBtn">Run full scan</button>
-        <input id="searchInput" type="search" placeholder="Search assets..." />
+      <section class="hero-card" id="scanner">
+        <div class="hero-head row-between">
+          <h2>Scan Command Center</h2>
+          <span id="automationState" class="badge bg-Low">unknown</span>
+        </div>
+        <div class="scan-strip scan-strip-main">
+          <input id="scanUrlInput" type="url" placeholder="Enter website URL (e.g. https://example.com)" />
+          <button id="scanNowBtn">Run full scan</button>
+          <input id="searchInput" type="search" placeholder="Search assets/reports..." />
+        </div>
+        <div id="scanStatus" class="muted"></div>
       </section>
-      <div id="scanStatus" class="muted"></div>
-
 
       <section class="panel" id="portfolioReporting">
         <div class="row-between">
@@ -69,29 +83,22 @@
         </div>
       </section>
 
-      <section class="panel" id="automation">
-        <div class="row-between">
-          <h3>Continuous ASM Automation</h3>
-          <span id="automationState" class="badge bg-Low">unknown</span>
-        </div>
-        <div class="scan-strip">
-          <input id="monitorUrlInput" type="url" placeholder="Target URL for continuous monitoring" />
-          <button id="addMonitorBtn">Add monitor target</button>
-        </div>
-        <table>
-          <thead>
-            <tr><th>Target</th><th>Interval(s)</th><th>Last Scan</th><th>Status</th></tr>
-          </thead>
-          <tbody id="monitorRows"></tbody>
-        </table>
-      </section>
-
       <section class="grid-2">
-        <article class="panel">
-          <h3>Asset trends</h3>
-          <p class="muted">EPSS-aware asset growth over recent scans</p>
-          <canvas id="trendCanvas" width="700" height="260"></canvas>
-          <div class="legend" id="assetLegend"></div>
+        <article class="panel" id="automation">
+          <div class="row-between">
+            <h3>Continuous ASM Automation</h3>
+            <span class="muted">Monitor targets and scheduling</span>
+          </div>
+          <div class="scan-strip">
+            <input id="monitorUrlInput" type="url" placeholder="Target URL for continuous monitoring" />
+            <button id="addMonitorBtn">Add monitor target</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Target</th><th>Interval(s)</th><th>Last Scan</th><th>Status</th></tr>
+            </thead>
+            <tbody id="monitorRows"></tbody>
+          </table>
         </article>
 
         <article class="panel">
@@ -105,6 +112,12 @@
         </article>
       </section>
 
+      <section class="panel">
+        <h3>Asset trends</h3>
+        <p class="muted">EPSS-aware asset growth over recent scans</p>
+        <canvas id="trendCanvas" width="700" height="260"></canvas>
+        <div class="legend" id="assetLegend"></div>
+      </section>
 
       <section class="panel" id="assetByUrl">
         <div class="row-between">
