@@ -28,6 +28,7 @@ An enterprise-grade ASM platform with:
 - `GET /api/assets/by-url`
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
+- `GET /api/reports/{report_id}/tool-runs`
 - `GET /api/reporting/portfolio`
 - `POST /api/scan` (synchronous full scan)
 - `POST /api/jobs/scan` (queued prioritized scan)

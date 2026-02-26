@@ -34,6 +34,7 @@ const dWaf = document.getElementById('dWaf');
 const dPortRange = document.getElementById('dPortRange');
 const dTopEpss = document.getElementById('dTopEpss');
 const dTools = document.getElementById('dTools');
+const dToolHealth = document.getElementById('dToolHealth');
 const dPorts = document.getElementById('dPorts');
 
 const listTargets = {
@@ -204,7 +205,9 @@ async function renderTargetDetails(reportId) {
   dWaf.textContent = report.waf_detected || 'Unknown';
   dPortRange.textContent = `${report.scanned_port_range} | ${(report.open_ports || []).length} open ports discovered`;
   dTopEpss.textContent = `${(report.max_epss_score * 100).toFixed(1)}% (${(report.max_epss_percentile * 100).toFixed(1)} percentile)`;
-  dTools.textContent = (report.tools_executed || []).join(', ');
+  dTools.textContent = (report.tools_executed || []).join(', ') || 'None';
+  const hs = report.tool_health_summary || {};
+  dToolHealth.textContent = `Tool health: success ${hs.success || 0}, unavailable ${hs.unavailable || 0}, error ${hs.error || 0}, empty ${hs.empty || 0}. Failed: ${(report.tools_failed || []).join(', ') || '-'} `;
   dPorts.textContent = fmtPorts(report.open_ports || []);
 
   fillList(listTargets.subs, report.discovered_subdomains || []);

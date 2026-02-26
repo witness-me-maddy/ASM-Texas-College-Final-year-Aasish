@@ -104,6 +104,26 @@ class ToolFinding(BaseModel):
     evidence_url: Optional[HttpUrl] = None
 
 
+
+
+class ToolRunStatus(str, Enum):
+    success = "success"
+    unavailable = "unavailable"
+    error = "error"
+    empty = "empty"
+
+
+class ToolRun(BaseModel):
+    report_id: str
+    tool_name: str
+    command: str
+    status: ToolRunStatus
+    duration_ms: int = 0
+    return_code: Optional[int] = None
+    message: Optional[str] = None
+    recorded_at: datetime
+
+
 class IngestRequest(BaseModel):
     findings: List[ToolFinding]
 
@@ -149,6 +169,8 @@ class ScanReport(BaseModel):
     started_at: datetime
     completed_at: datetime
     tools_executed: List[str]
+    tools_failed: List[str] = Field(default_factory=list)
+    tool_health_summary: dict[str, int] = Field(default_factory=dict)
     scanned_port_range: str = "1-65535"
     assets_discovered: int
     exposures_discovered: int

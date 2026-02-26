@@ -66,6 +66,8 @@ def test_sync_scan_contains_integrated_tools_and_intel_fields():
     assert isinstance(report['discovered_subdomains'], list)
     assert isinstance(report['open_ports'], list)
     assert report['exposures_discovered'] >= 0
+    assert 'tool_health_summary' in report
+    assert 'tools_failed' in report
 
 
 def test_job_detail_endpoint_returns_submitted_job():
@@ -123,3 +125,16 @@ def test_scan_does_not_emit_tool_unavailable_as_findings():
         assert 'TOOL_UNAVAILABLE:' not in title
         assert 'TOOL_ERROR:' not in title
         assert 'could not run' not in title.lower()
+
+
+def test_report_tool_runs_endpoint_returns_tool_telemetry():
+    response = client.post('/api/scan', json={'website_url': 'https://telemetry.example.com'})
+    assert response.status_code == 200
+    report_id = response.json()['report']['id']
+
+    telemetry = client.get(f'/api/reports/{report_id}/tool-runs')
+    assert telemetry.status_code == 200
+    runs = telemetry.json()['tool_runs']
+    assert isinstance(runs, list)
+    assert len(runs) >= 1
+    assert {'tool_name', 'status', 'duration_ms'}.issubset(set(runs[0].keys()))

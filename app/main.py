@@ -104,6 +104,15 @@ def get_report(report_id: str):
     return {"report": report}
 
 
+
+
+@app.get("/api/reports/{report_id}/tool-runs")
+def report_tool_runs(report_id: str):
+    report = repo.get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return {"tool_runs": repo.list_tool_runs(report_id)}
+
 @app.get("/api/jobs")
 def list_jobs():
     return {"jobs": repo.list_jobs()}

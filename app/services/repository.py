@@ -19,6 +19,7 @@ from app.models import (
     ScannerNode,
     Summary,
     TicketRecord,
+    ToolRun,
 )
 
 
@@ -30,6 +31,7 @@ class InMemoryRepository:
         self.jobs: Dict[str, ScanJob] = {}
         self.nodes: Dict[str, ScannerNode] = {}
         self.tickets: Dict[str, TicketRecord] = {}
+        self.tool_runs_by_report: Dict[str, list[ToolRun]] = {}
         self.last_automation_cycle_at: datetime | None = None
 
     def _seed(self) -> None:
@@ -155,6 +157,14 @@ class InMemoryRepository:
 
     def list_nodes(self) -> list[ScannerNode]:
         return list(self.nodes.values())
+
+
+
+    def set_tool_runs(self, report_id: str, tool_runs: list[ToolRun]) -> None:
+        self.tool_runs_by_report[report_id] = tool_runs
+
+    def list_tool_runs(self, report_id: str) -> list[ToolRun]:
+        return self.tool_runs_by_report.get(report_id, [])
 
     def add_ticket(self, ticket: TicketRecord) -> TicketRecord:
         self.tickets[ticket.id] = ticket

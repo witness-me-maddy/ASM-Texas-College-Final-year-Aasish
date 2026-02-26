@@ -34,6 +34,8 @@ from app.models import (
     TicketRecord,
     TicketRequest,
     ToolFinding,
+    ToolRun,
+    ToolRunStatus,
 )
 from app.services.epss_service import EPSSService
 from app.services.repository import InMemoryRepository
@@ -245,7 +247,7 @@ class ASMScannerService:
         parsed = urlparse(website_url)
         host = parsed.hostname or website_url
 
-        tool_outputs = self._run_tools(host)
+        tool_outputs, tool_runs = self._run_tools(host)
         http_enrichment = self._fetch_http_enrichment(website_url)
         findings = self._normalize_tool_outputs(host, tool_outputs)
         if not findings and http_enrichment.get("urls"):
@@ -283,7 +285,9 @@ class ASMScannerService:
             status=ScanStatus.completed,
             started_at=started,
             completed_at=datetime.now(timezone.utc),
-            tools_executed=list(tool_outputs.keys()),
+            tools_executed=[run.tool_name for run in tool_runs if run.status == ToolRunStatus.success],
+            tools_failed=[run.tool_name for run in tool_runs if run.status != ToolRunStatus.success],
+            tool_health_summary=self._build_tool_health_summary(tool_runs),
             scanned_port_range="1-65535",
             assets_discovered=1 + len(discovered_subdomains),
             exposures_discovered=created,
@@ -300,7 +304,10 @@ class ASMScannerService:
             waf_detected=self._extract_waf(tool_outputs),
             top_exposures=sorted(exposures, key=lambda e: e.risk_score, reverse=True)[:8],
         )
+        for run in tool_runs:
+            run.report_id = report.id
         self.repository.add_report(report)
+        self.repository.set_tool_runs(report.id, tool_runs)
         return asset, report
 
     def _fetch_http_enrichment(self, website_url: str) -> dict[str, list[str] | str]:
@@ -317,7 +324,7 @@ class ASMScannerService:
             pass
         return {"urls": urls, "bodies": bodies, "headers": headers}
 
-    def _run_tools(self, host: str) -> dict[str, str]:
+    def _run_tools(self, host: str) -> tuple[dict[str, str], list[ToolRun]]:
         commands = {
             "Nmap": ["nmap", "-T4", "-Pn", "--top-ports", "100", host],
             "Masscan": ["masscan", host, "-p1-1024", "--rate", "1000"],
@@ -332,22 +339,75 @@ class ASMScannerService:
         }
 
         outputs: dict[str, str] = {}
+        runs: list[ToolRun] = []
         for tool, cmd in commands.items():
-            outputs[tool] = self._run_tool_or_fallback(tool, cmd, host)
-        return outputs
+            output, run = self._run_tool_or_fallback(tool, cmd, host)
+            outputs[tool] = output
+            runs.append(run)
+        return outputs, runs
 
-    def _run_tool_or_fallback(self, tool: str, cmd: list[str], host: str) -> str:
+    @staticmethod
+    def _build_tool_health_summary(tool_runs: list[ToolRun]) -> dict[str, int]:
+        summary = {"success": 0, "unavailable": 0, "error": 0, "empty": 0}
+        for run in tool_runs:
+            summary[run.status.value] = summary.get(run.status.value, 0) + 1
+        return summary
+
+    def _run_tool_or_fallback(self, tool: str, cmd: list[str], host: str) -> tuple[str, ToolRun]:
+        command_str = " ".join(cmd)
+        started = time.time()
         binary = cmd[0]
         if not shutil.which(binary):
-            return f"TOOL_UNAVAILABLE:{tool}:{binary}"
+            run = ToolRun(
+                report_id="pending",
+                tool_name=tool,
+                command=command_str,
+                status=ToolRunStatus.unavailable,
+                duration_ms=int((time.time() - started) * 1000),
+                return_code=None,
+                message=f"binary {binary} not found",
+                recorded_at=datetime.now(timezone.utc),
+            )
+            return f"TOOL_UNAVAILABLE:{tool}:{binary}", run
         try:
             completed = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
             output = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()
-            if completed.returncode != 0 and not output:
-                return f"TOOL_ERROR:{tool}:exit_{completed.returncode}"
-            return output or f"TOOL_EMPTY:{tool}"
+            status = ToolRunStatus.success
+            message = None
+            if completed.returncode != 0:
+                status = ToolRunStatus.error
+                message = f"exit code {completed.returncode}"
+            elif not output:
+                status = ToolRunStatus.empty
+                message = "command returned no output"
+
+            run = ToolRun(
+                report_id="pending",
+                tool_name=tool,
+                command=command_str,
+                status=status,
+                duration_ms=int((time.time() - started) * 1000),
+                return_code=completed.returncode,
+                message=message,
+                recorded_at=datetime.now(timezone.utc),
+            )
+            if status == ToolRunStatus.error and not output:
+                return f"TOOL_ERROR:{tool}:exit_{completed.returncode}", run
+            if status == ToolRunStatus.empty:
+                return f"TOOL_EMPTY:{tool}", run
+            return output, run
         except Exception as exc:
-            return f"TOOL_ERROR:{tool}:{exc.__class__.__name__}"
+            run = ToolRun(
+                report_id="pending",
+                tool_name=tool,
+                command=command_str,
+                status=ToolRunStatus.error,
+                duration_ms=int((time.time() - started) * 1000),
+                return_code=None,
+                message=exc.__class__.__name__,
+                recorded_at=datetime.now(timezone.utc),
+            )
+            return f"TOOL_ERROR:{tool}:{exc.__class__.__name__}", run
 
     @staticmethod
     def _is_tool_unavailable_line(line: str) -> bool:
