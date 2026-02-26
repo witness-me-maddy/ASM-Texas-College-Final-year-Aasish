@@ -193,9 +193,24 @@ async function renderTargetDetails(reportId) {
 }
 
 async function runScan(url) {
-  return safeFetch(`${API_BASE}/api/scan`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ website_url: url }),
+  const submitted = await safeFetch(`${API_BASE}/api/jobs/scan`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ website_url: url, priority: 2 }),
   });
+  if (!submitted || !submitted.job) return null;
+
+  const jobId = submitted.job.id;
+  const maxAttempts = 30;
+  for (let i = 0; i < maxAttempts; i++) {
+    const jobsResponse = await safeFetch(`${API_BASE}/api/jobs`);
+    const job = (jobsResponse?.jobs || []).find((row) => row.id === jobId);
+    if (job && (job.status === 'completed' || job.status === 'failed')) {
+      if (job.status === 'failed') return null;
+      return { job };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+
+  return { job: { status: 'running' } };
 }
 
 async function addMonitorTarget() {
@@ -222,16 +237,17 @@ async function refresh(query = '') {
     return;
   }
 
-  let reports = reportsData.reports || [];
+  const allReports = reportsData.reports || [];
+  let reports = allReports;
   if (query) {
-    reports = reports.filter((r) => (r.target_host || '').toLowerCase().includes(query.toLowerCase()));
+    reports = allReports.filter((r) => (r.target_host || '').toLowerCase().includes(query.toLowerCase()));
   }
 
   renderReports(reports);
   renderMonitors((monitorData && monitorData.targets) || []);
-  renderTopFindings(reports);
+  renderTopFindings(allReports);
   drawTrend();
-  drawDonutFromReports(reports);
+  drawDonutFromReports(allReports);
   if (reports.length > 0) {
     renderTargetDetails(reports[0].id);
   } else {
@@ -255,8 +271,8 @@ scanNowBtn.addEventListener('click', async () => {
   if (!url) { scanStatus.textContent = 'Please enter website URL.'; return; }
   scanStatus.textContent = 'Running full scan across all ports and recon tools...';
   const result = await runScan(url);
-  if (!result) { scanStatus.textContent = 'Scan failed. API unavailable.'; return; }
-  scanStatus.textContent = `Scan completed for ${result.report.target_host}. Click target rows for deep intelligence.`;
+  if (!result) { scanStatus.textContent = 'Scan failed or timed out. Please try again.'; return; }
+  scanStatus.textContent = `Scan completed for ${new URL(url).hostname}. Position, ports, and vulnerabilities updated.`;
   await refresh(searchInput.value.trim());
 });
 
