@@ -25,6 +25,7 @@ An enterprise-grade ASM platform with:
 - `GET /health`
 - `GET /api/summary`
 - `GET /api/assets`
+- `GET /api/assets/by-url`
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
 - `GET /api/reporting/portfolio`

@@ -5,6 +5,11 @@ from app.main import app
 client = TestClient(app)
 
 
+def _bootstrap_exposures():
+    # Ensure repository has API-driven scan data before lifecycle/report assertions.
+    client.post('/api/scan', json={'website_url': 'https://bootstrap.example.com'})
+
+
 def test_summary_endpoint_uses_contextual_risk_framework():
     response = client.get('/api/summary')
     assert response.status_code == 200
@@ -23,6 +28,7 @@ def test_scan_job_submission_and_nodes_endpoints():
 
 
 def test_exposure_lifecycle_ticket_and_exception_flow():
+    _bootstrap_exposures()
     exposures = client.get('/api/exposures')
     assert exposures.status_code == 200
     rows = exposures.json()['exposures']
@@ -72,6 +78,7 @@ def test_job_detail_endpoint_returns_submitted_job():
 
 
 def test_approving_exception_sets_exposure_to_accepted():
+    _bootstrap_exposures()
     exposures = client.get('/api/exposures')
     exposure_id = exposures.json()['exposures'][0]['id']
 
@@ -94,3 +101,12 @@ def test_reporting_portfolio_endpoint_returns_enterprise_metrics():
     kpis = reporting['kpis']
     for key in ['assets', 'total_exposures', 'open_exposures', 'sla_breaches', 'reports_generated']:
         assert key in kpis
+
+
+def test_assets_by_url_section_reflects_scanned_asset_mapping():
+    client.post('/api/scan', json={'website_url': 'https://mapping.example.com'})
+    response = client.get('/api/assets/by-url')
+    assert response.status_code == 200
+    sections = response.json()['sections']
+    assert isinstance(sections, list)
+    assert any(s['asset_name'] == 'mapping.example.com' for s in sections)

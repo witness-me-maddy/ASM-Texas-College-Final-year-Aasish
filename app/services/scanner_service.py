@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import queue
+import re
 import shutil
+import socket
 import subprocess
 import threading
 import time
@@ -330,30 +332,73 @@ class ASMScannerService:
         return "Generic finding"
 
     def _normalize_tool_outputs(self, host: str, outputs: dict[str, str]) -> list[ToolFinding]:
-        mapping = [
-            ("Nmap", "Open service exposure from port scan", "CVE-2024-6387", "high"),
-            ("Masscan", "High-volume open port exposure", "CVE-2023-44487", "high"),
-            ("Nikto", "Outdated web component detected", "CVE-2023-25690", "medium"),
-            ("Nuclei", "Template-based vulnerability discovered", "CVE-2023-20198", "critical"),
-            ("Subfinder", "Sensitive subdomain takeover candidate", "CVE-2021-41773", "medium"),
-            ("Assetfinder", "Legacy exposed host discovered", "CVE-2023-3446", "high"),
-            ("Amass", "DNS exposure finding", "CVE-2023-50387", "medium"),
-            ("httpx", "Deprecated TLS/headers policy", "CVE-2022-0778", "high"),
-            ("Naabu", "Unexpected management interface port", "CVE-2023-1389", "critical"),
-            ("Wafw00f", "Potential WAF bypass exposure", "CVE-2020-5902", "critical"),
-        ]
         findings: list[ToolFinding] = []
-        for idx, (tool, title, cve, sev) in enumerate(mapping, start=1):
+
+        cve_map = {
+            "Nmap": "CVE-2024-6387",
+            "Masscan": "CVE-2023-44487",
+            "Naabu": "CVE-2023-1389",
+            "Nikto": "CVE-2023-25690",
+            "Nuclei": "CVE-2023-20198",
+            "httpx": "CVE-2022-0778",
+            "Wafw00f": "CVE-2020-5902",
+            "Subfinder": "CVE-2021-41773",
+            "Assetfinder": "CVE-2023-3446",
+            "Amass": "CVE-2023-50387",
+        }
+
+        for tool, raw in outputs.items():
+            lines = [line.strip() for line in raw.splitlines() if line.strip()]
+            if not lines:
+                continue
+
+            if tool in {"Nmap", "Masscan", "Naabu"}:
+                for idx, line in enumerate(lines[:8], start=1):
+                    if "/tcp" not in line and "/udp" not in line:
+                        continue
+                    port = line.split('/')[0].strip()
+                    findings.append(
+                        ToolFinding(
+                            tool_name=tool,
+                            target=host,
+                            finding_id=f"{tool.lower()}-port-{idx}",
+                            title=f"Open network service exposed on port {port}",
+                            severity_hint="critical" if port in {"22", "3389", "445", "5432", "3306"} else "high",
+                            cve=cve_map.get(tool),
+                        )
+                    )
+                continue
+
+            evidence = lines[0]
+            severity = "medium"
+            title = f"{tool} reported finding"
+            if tool == "Nuclei":
+                severity = "critical"
+                title = f"Nuclei template match: {evidence[:90]}"
+            elif tool == "Nikto":
+                severity = "high"
+                title = f"Nikto web finding: {evidence[:90]}"
+            elif tool == "httpx":
+                severity = "medium"
+                title = f"HTTP exposure: {evidence[:90]}"
+            elif tool == "Wafw00f":
+                severity = "medium"
+                title = f"WAF detection result: {evidence[:90]}"
+            elif tool in {"Subfinder", "Assetfinder", "Amass"}:
+                severity = "medium"
+                title = f"Discovered attack-surface entries from {tool}"
+
             findings.append(
                 ToolFinding(
                     tool_name=tool,
                     target=host,
-                    finding_id=f"{tool.lower()}-{idx}",
+                    finding_id=f"{tool.lower()}-finding-1",
                     title=title,
-                    severity_hint=sev,
-                    cve=cve,
+                    severity_hint=severity,
+                    cve=cve_map.get(tool),
                 )
             )
+
         return findings
 
     @staticmethod
@@ -398,28 +443,38 @@ class ASMScannerService:
 
     @staticmethod
     def _extract_ips(host: str) -> list[str]:
-        seed = int(hashlib.sha256((host + "ips").encode("utf-8")).hexdigest()[:8], 16)
-        return [f"203.0.113.{(seed % 180) + i + 1}" for i in range(5)]
+        try:
+            _, _, ips = socket.gethostbyname_ex(host)
+            return sorted(set(ips))[:10]
+        except Exception:
+            return []
 
     def _extract_technologies(self, outputs: dict[str, str]) -> list[str]:
-        techs = {"Nginx", "React", "Cloudflare", "FastAPI"}
+        techs: set[str] = set()
         raw = outputs.get("httpx", "")
-        if "Kubernetes" in raw:
-            techs.add("Kubernetes")
+        for token in ["Nginx", "Apache", "IIS", "React", "Vue", "Angular", "Cloudflare", "FastAPI", "Django", "Express", "Kubernetes"]:
+            if token.lower() in raw.lower():
+                techs.add(token)
         return sorted(techs)
 
     @staticmethod
     def _extract_urls(host: str, outputs: dict[str, str]) -> list[str]:
-        base = ["/", "/login", "/admin", "/api/v1/users", "/health", "/docs", "/backup.zip", "/debug"]
-        return [f"https://{host}{p}" for p in base]
+        url_pattern = re.compile(r"https?://[^\s\]]+")
+        urls: set[str] = set()
+        for raw in outputs.values():
+            for match in url_pattern.findall(raw):
+                urls.add(match)
+        if not urls:
+            urls.add(f"https://{host}")
+        return sorted(urls)[:20]
 
     @staticmethod
     def _extract_emails(host: str) -> list[str]:
-        return [f"{u}@{host}" for u in ["security", "admin", "support", "devops"]]
+        return []
 
     @staticmethod
     def _extract_cloud_assets(host: str) -> list[str]:
-        return ["aws-s3-public-bucket", "azure-blob-storage", "gcp-storage-bucket"]
+        return []
 
     @staticmethod
     def _extract_waf(outputs: dict[str, str]) -> str:

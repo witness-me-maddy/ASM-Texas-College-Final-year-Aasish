@@ -80,6 +80,12 @@ def get_summary():
 def reporting_portfolio():
     return {"reporting": repo.reporting_snapshot()}
 
+
+
+@app.get("/api/assets/by-url")
+def assets_by_url_section():
+    return {"sections": repo.url_asset_sections()}
+
 @app.get("/api/assets")
 def list_assets():
     return {"assets": repo.list_assets()}

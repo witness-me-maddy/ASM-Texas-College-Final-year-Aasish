@@ -25,6 +25,7 @@ const kpiAccepted = document.getElementById('kpiAccepted');
 const kpiReports = document.getElementById('kpiReports');
 const businessUnitRows = document.getElementById('businessUnitRows');
 const sourceToolRows = document.getElementById('sourceToolRows');
+const assetByUrlRows = document.getElementById('assetByUrlRows');
 
 const detailEmpty = document.getElementById('detailEmpty');
 const detailView = document.getElementById('detailView');
@@ -241,6 +242,23 @@ async function addMonitorTarget() {
 }
 
 
+
+function renderAssetByUrl(sectionsPayload) {
+  assetByUrlRows.innerHTML = '';
+  const sections = sectionsPayload?.sections || [];
+
+  if (sections.length === 0) {
+    assetByUrlRows.innerHTML = '<tr><td colspan="7">No scanned assets yet. Run a scan to populate enterprise asset mapping.</td></tr>';
+    return;
+  }
+
+  sections.forEach((row) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${row.asset_name}</td><td>${row.asset_id}</td><td>${row.owner}</td><td>${row.business_unit}</td><td>${row.open_exposures}/${row.total_exposures}</td><td>${row.latest_report_id || '-'}</td><td>${row.latest_scanned_at ? new Date(row.latest_scanned_at).toLocaleString() : '-'}</td>`;
+    assetByUrlRows.append(tr);
+  });
+}
+
 function renderPortfolioReporting(reportingPayload) {
   const reporting = reportingPayload?.reporting;
   const kpis = reporting?.kpis;
@@ -280,12 +298,13 @@ function renderPortfolioReporting(reportingPayload) {
 }
 
 async function refresh(query = '') {
-  const [summary, reportsData, monitorData, automationData, portfolioData] = await Promise.all([
+  const [summary, reportsData, monitorData, automationData, portfolioData, assetsByUrlData] = await Promise.all([
     safeFetch(`${API_BASE}/api/summary`),
     safeFetch(`${API_BASE}/api/reports`),
     safeFetch(`${API_BASE}/api/monitor-targets`),
     safeFetch(`${API_BASE}/api/automation`),
     safeFetch(`${API_BASE}/api/reporting/portfolio`),
+    safeFetch(`${API_BASE}/api/assets/by-url`),
   ]);
 
   if (!reportsData) {
@@ -319,6 +338,7 @@ async function refresh(query = '') {
   }
 
   renderPortfolioReporting(portfolioData);
+  renderAssetByUrl(assetsByUrlData);
 
   if (summary && summary.risk_framework) {
     updatedAt.textContent = `Statistics updated on ${new Date().toLocaleString()} · ${summary.risk_framework}`;

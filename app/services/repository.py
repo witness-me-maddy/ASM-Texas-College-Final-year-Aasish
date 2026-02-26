@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Dict, List
 from uuid import uuid4
 
@@ -31,67 +31,39 @@ class InMemoryRepository:
         self.nodes: Dict[str, ScannerNode] = {}
         self.tickets: Dict[str, TicketRecord] = {}
         self.last_automation_cycle_at: datetime | None = None
-        self._seed()
 
     def _seed(self) -> None:
-        now = datetime.now(timezone.utc)
-        exposure = Exposure(
-            id="exp-1",
-            title="Outdated OpenSSL package",
-            description="Detected by vulnerability scanner",
-            cve="CVE-2023-0286",
-            epss_score=0.62,
-            epss_percentile=0.93,
-            risk_score=0.76,
-            source_tool="Nessus",
-            discovered_at=now,
-            status=ExposureStatus.open,
-            fingerprint="portal.texascollege.edu|cve-2023-0286",
-            sla_due_at=now + timedelta(days=14),
-        )
+        """No demo seeding; repository starts empty for API-driven scans."""
+        return
 
-        asset = Asset(
-            id="asset-1",
-            name="portal.texascollege.edu",
-            type=AssetType.web_app,
-            owner="IT Security",
-            business_unit="Student Services",
-            internet_exposed=True,
-            criticality=5,
-            tags=["production", "student-facing"],
-            position=GeoPosition(city="Dallas", country="USA", latitude=32.7767, longitude=-96.7970),
-            open_ports=[OpenPort(port=443, protocol="tcp", service="https"), OpenPort(port=22, protocol="tcp", service="ssh")],
-            exposures=[exposure],
-        )
-        exposure.asset_id = asset.id
-        self.assets = {asset.id: asset}
 
-        self.reports = [
-            ScanReport(
-                id="scan-seed-1",
-                website_url="https://portal.texascollege.edu",
-                target_host="portal.texascollege.edu",
-                status=ScanStatus.completed,
-                started_at=now,
-                completed_at=now,
-                tools_executed=["Nmap", "Masscan", "Subfinder", "Nuclei"],
-                scanned_port_range="1-65535",
-                assets_discovered=5,
-                exposures_discovered=1,
-                max_epss_score=0.62,
-                max_epss_percentile=0.93,
-                target_position=asset.position,
-                open_ports=asset.open_ports,
-                discovered_subdomains=["www.portal.texascollege.edu", "api.portal.texascollege.edu"],
-                discovered_ips=["203.0.113.10", "203.0.113.11"],
-                discovered_technologies=["Nginx", "React", "FastAPI"],
-                discovered_urls=["https://portal.texascollege.edu/login"],
-                discovered_emails=["security@texascollege.edu"],
-                discovered_cloud_assets=["aws-s3-public-bucket"],
-                waf_detected="Cloudflare WAF",
-                top_exposures=[exposure],
-            )
-        ]
+
+    def url_asset_sections(self) -> list[dict]:
+        reports_by_host: dict[str, list[ScanReport]] = defaultdict(list)
+        for report in self.reports:
+            reports_by_host[report.target_host].append(report)
+
+        sections: list[dict] = []
+        for asset in self.assets.values():
+            asset_reports = sorted(reports_by_host.get(asset.name, []), key=lambda r: r.completed_at, reverse=True)
+            open_exposures = [e for e in asset.exposures if e.status == ExposureStatus.open]
+            top_epss = max((e.epss_score for e in open_exposures), default=0.0)
+            sections.append({
+                "asset_id": asset.id,
+                "asset_name": asset.name,
+                "asset_type": asset.type,
+                "owner": asset.owner,
+                "business_unit": asset.business_unit,
+                "open_exposures": len(open_exposures),
+                "total_exposures": len(asset.exposures),
+                "top_epss_score": round(top_epss, 4),
+                "latest_report_id": asset_reports[0].id if asset_reports else None,
+                "latest_scanned_at": asset_reports[0].completed_at if asset_reports else None,
+                "reports_count": len(asset_reports),
+            })
+
+        sections.sort(key=lambda row: (row["open_exposures"], row["top_epss_score"]), reverse=True)
+        return sections
 
     def list_assets(self) -> List[Asset]:
         return list(self.assets.values())
