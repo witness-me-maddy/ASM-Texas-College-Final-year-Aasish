@@ -6,6 +6,8 @@ import re
 import shutil
 import socket
 import subprocess
+
+import httpx
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -244,6 +246,7 @@ class ASMScannerService:
         host = parsed.hostname or website_url
 
         tool_outputs = self._run_tools(host)
+        http_enrichment = self._fetch_http_enrichment(website_url)
         findings = self._normalize_tool_outputs(host, tool_outputs)
 
         asset = self.repository.upsert_asset(name=host, owner="Automated ASM Scanner", business_unit="Security Operations")
@@ -257,6 +260,11 @@ class ASMScannerService:
         max_epss = max((e.epss_score for e in exposures), default=0.0)
         max_percentile = max((e.epss_percentile for e in exposures), default=0.0)
 
+        discovered_subdomains = self._extract_subdomains(host, tool_outputs)
+        discovered_urls = sorted(set(self._extract_urls(host, tool_outputs) + list(http_enrichment.get("urls", []))))
+        discovered_emails = self._extract_emails(host, tool_outputs, discovered_urls, list(http_enrichment.get("bodies", [])))
+        discovered_cloud_assets = self._extract_cloud_assets(host, tool_outputs, discovered_urls, discovered_subdomains, list(http_enrichment.get("headers", [])))
+
         report = ScanReport(
             id=f"scan-{uuid4()}",
             website_url=website_url,
@@ -266,23 +274,37 @@ class ASMScannerService:
             completed_at=datetime.now(timezone.utc),
             tools_executed=list(tool_outputs.keys()),
             scanned_port_range="1-65535",
-            assets_discovered=1 + len(self._extract_subdomains(host, tool_outputs)),
+            assets_discovered=1 + len(discovered_subdomains),
             exposures_discovered=created,
             max_epss_score=round(max_epss, 4),
             max_epss_percentile=round(max_percentile, 4),
             target_position=asset.position,
             open_ports=asset.open_ports,
-            discovered_subdomains=self._extract_subdomains(host, tool_outputs),
+            discovered_subdomains=discovered_subdomains,
             discovered_ips=self._extract_ips(host),
             discovered_technologies=self._extract_technologies(tool_outputs),
-            discovered_urls=self._extract_urls(host, tool_outputs),
-            discovered_emails=self._extract_emails(host),
-            discovered_cloud_assets=self._extract_cloud_assets(host),
+            discovered_urls=discovered_urls,
+            discovered_emails=discovered_emails,
+            discovered_cloud_assets=discovered_cloud_assets,
             waf_detected=self._extract_waf(tool_outputs),
             top_exposures=sorted(exposures, key=lambda e: e.risk_score, reverse=True)[:8],
         )
         self.repository.add_report(report)
         return asset, report
+
+    def _fetch_http_enrichment(self, website_url: str) -> dict[str, list[str] | str]:
+        urls: list[str] = []
+        bodies: list[str] = []
+        headers: list[str] = []
+        try:
+            with httpx.Client(follow_redirects=True, timeout=8.0, verify=False) as client:
+                response = client.get(website_url)
+                urls.append(str(response.url))
+                bodies.append(response.text[:100000])
+                headers.append("\n".join(f"{k}: {v}" for k, v in response.headers.items()))
+        except Exception:
+            pass
+        return {"urls": urls, "bodies": bodies, "headers": headers}
 
     def _run_tools(self, host: str) -> dict[str, str]:
         commands = {
@@ -306,30 +328,19 @@ class ASMScannerService:
     def _run_tool_or_fallback(self, tool: str, cmd: list[str], host: str) -> str:
         binary = cmd[0]
         if not shutil.which(binary):
-            return self._fallback_output(tool, host)
+            return f"TOOL_UNAVAILABLE:{tool}:{binary}"
         try:
             completed = subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
-            output = (completed.stdout or "") + "\n" + (completed.stderr or "")
-            output = output.strip()
-            return output or self._fallback_output(tool, host)
-        except Exception:
-            return self._fallback_output(tool, host)
+            output = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()
+            if completed.returncode != 0 and not output:
+                return f"TOOL_ERROR:{tool}:exit_{completed.returncode}"
+            return output or f"TOOL_EMPTY:{tool}"
+        except Exception as exc:
+            return f"TOOL_ERROR:{tool}:{exc.__class__.__name__}"
 
-    def _fallback_output(self, tool: str, host: str) -> str:
-        seed = int(hashlib.sha256((tool + host).encode()).hexdigest()[:8], 16)
-        if tool in {"Nmap", "Masscan", "Naabu"}:
-            ports = [21, 22, 80, 443, 445, 3306, 5432, 6379, 8080, 8443, 9200, 27017]
-            subset = [str(ports[(seed + i) % len(ports)]) for i in range(10)]
-            return "\n".join([f"{p}/tcp open" for p in subset])
-        if tool in {"Subfinder", "Assetfinder", "Amass"}:
-            return "\n".join([f"www.{host}", f"api.{host}", f"dev.{host}", f"staging.{host}"])
-        if tool == "httpx":
-            return f"https://{host} [200] [Nginx, React, Cloudflare]"
-        if tool == "Wafw00f":
-            return "Detected WAF: Cloudflare"
-        if tool == "Nikto":
-            return "+ OSVDB-3233: /admin/: This might be interesting"
-        return "Generic finding"
+    @staticmethod
+    def _is_tool_unavailable_line(line: str) -> bool:
+        return line.startswith("TOOL_UNAVAILABLE:") or line.startswith("TOOL_ERROR:") or line.startswith("TOOL_EMPTY:")
 
     def _normalize_tool_outputs(self, host: str, outputs: dict[str, str]) -> list[ToolFinding]:
         findings: list[ToolFinding] = []
@@ -348,7 +359,7 @@ class ASMScannerService:
         }
 
         for tool, raw in outputs.items():
-            lines = [line.strip() for line in raw.splitlines() if line.strip()]
+            lines = [line.strip() for line in raw.splitlines() if line.strip() and not self._is_tool_unavailable_line(line)]
             if not lines:
                 continue
 
@@ -424,8 +435,6 @@ class ASMScannerService:
                         found.append(p)
                     except Exception:
                         continue
-        if not found:
-            found = [80, 443, 22, 3306, 8080]
         services = {80: "http", 443: "https", 22: "ssh", 3306: "mysql", 5432: "postgresql", 8080: "http-alt", 8443: "https-alt", 6379: "redis"}
         uniq = sorted(set(found))[:20]
         return [OpenPort(port=p, protocol="tcp", service=services.get(p, "unknown")) for p in uniq]
@@ -437,8 +446,6 @@ class ASMScannerService:
                 line = line.strip()
                 if line.endswith(host):
                     subs.add(line)
-        if not subs:
-            subs = {f"www.{host}", f"api.{host}", f"dev.{host}"}
         return sorted(subs)
 
     @staticmethod
@@ -469,12 +476,39 @@ class ASMScannerService:
         return sorted(urls)[:20]
 
     @staticmethod
-    def _extract_emails(host: str) -> list[str]:
-        return []
+    def _extract_emails(host: str, outputs: dict[str, str], discovered_urls: list[str], enrichment_bodies: list[str]) -> list[str]:
+        email_pattern = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+        emails: set[str] = set()
+        for raw in outputs.values():
+            for match in email_pattern.findall(raw):
+                emails.add(match.lower())
+        for url in discovered_urls:
+            for match in email_pattern.findall(url):
+                emails.add(match.lower())
+        for body in enrichment_bodies:
+            for match in email_pattern.findall(body):
+                emails.add(match.lower())
+        return sorted(emails)[:25]
 
     @staticmethod
-    def _extract_cloud_assets(host: str) -> list[str]:
-        return []
+    def _extract_cloud_assets(host: str, outputs: dict[str, str], discovered_urls: list[str], subdomains: list[str], enrichment_headers: list[str]) -> list[str]:
+        indicators = {
+            "amazonaws.com": "aws",
+            "cloudfront.net": "aws",
+            "s3": "aws",
+            "azure": "azure",
+            "blob.core.windows.net": "azure",
+            "googleapis.com": "gcp",
+            "gcp": "gcp",
+            "digitaloceanspaces.com": "digitalocean",
+        }
+        corpus = "\n".join(list(outputs.values()) + discovered_urls + subdomains + enrichment_headers + [host]).lower()
+        found: set[str] = set()
+        for needle, label in indicators.items():
+            if needle in corpus:
+                found.add(label)
+        return sorted(found)
+
 
     @staticmethod
     def _extract_waf(outputs: dict[str, str]) -> str:

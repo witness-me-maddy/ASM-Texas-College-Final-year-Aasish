@@ -63,8 +63,9 @@ def test_sync_scan_contains_integrated_tools_and_intel_fields():
     assert report['scanned_port_range'] == '1-65535'
     for tool in ['Nmap', 'Masscan', 'Subfinder', 'Assetfinder', 'Nikto', 'Nuclei', 'Amass', 'httpx', 'Naabu', 'Wafw00f']:
         assert tool in report['tools_executed']
-    assert len(report['discovered_subdomains']) >= 1
-    assert len(report['open_ports']) >= 1
+    assert isinstance(report['discovered_subdomains'], list)
+    assert isinstance(report['open_ports'], list)
+    assert report['exposures_discovered'] >= 0
 
 
 def test_job_detail_endpoint_returns_submitted_job():
@@ -110,3 +111,13 @@ def test_assets_by_url_section_reflects_scanned_asset_mapping():
     sections = response.json()['sections']
     assert isinstance(sections, list)
     assert any(s['asset_name'] == 'mapping.example.com' for s in sections)
+
+
+def test_scan_does_not_emit_tool_unavailable_as_findings():
+    response = client.post('/api/scan', json={'website_url': 'https://quality.example.com'})
+    assert response.status_code == 200
+    report = response.json()['report']
+
+    for exposure in report['top_exposures']:
+        assert 'TOOL_UNAVAILABLE:' not in exposure['title']
+        assert 'TOOL_ERROR:' not in exposure['title']
