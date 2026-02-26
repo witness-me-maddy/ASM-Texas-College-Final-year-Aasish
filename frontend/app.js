@@ -159,7 +159,12 @@ function renderMonitors(targets) {
 
 function renderTopFindings(reports) {
   topFindings.innerHTML = '';
-  const ex = reports.flatMap((r) => (r.top_exposures || []).map((e) => ({ ...e, target: r.target_host })))
+  const ex = reports
+    .flatMap((r) => (r.top_exposures || []).map((e) => ({ ...e, target: r.target_host })))
+    .filter((e) => {
+      const title = (e.title || '').toLowerCase();
+      return !title.includes('could not run') && !title.includes('tool_unavailable:') && !title.includes('tool_error:');
+    })
     .sort((a, b) => b.epss_score - a.epss_score)
     .slice(0, 10);
 

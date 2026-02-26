@@ -248,6 +248,17 @@ class ASMScannerService:
         tool_outputs = self._run_tools(host)
         http_enrichment = self._fetch_http_enrichment(website_url)
         findings = self._normalize_tool_outputs(host, tool_outputs)
+        if not findings and http_enrichment.get("urls"):
+            findings.append(
+                ToolFinding(
+                    tool_name="http-enrichment",
+                    target=host,
+                    finding_id="http-enrichment-1",
+                    title="Internet-facing web endpoint discovered via live HTTP enrichment",
+                    severity_hint="medium",
+                    cve=None,
+                )
+            )
 
         asset = self.repository.upsert_asset(name=host, owner="Automated ASM Scanner", business_unit="Security Operations")
         asset.type = asset.type.web_app
@@ -342,6 +353,20 @@ class ASMScannerService:
     def _is_tool_unavailable_line(line: str) -> bool:
         return line.startswith("TOOL_UNAVAILABLE:") or line.startswith("TOOL_ERROR:") or line.startswith("TOOL_EMPTY:")
 
+    @staticmethod
+    def _is_tool_failure_evidence(line: str) -> bool:
+        normalized = line.lower()
+        failure_markers = [
+            "could not run",
+            "command not found",
+            "no module named",
+            "traceback",
+            "dependency",
+            "not installed",
+            "error while loading",
+        ]
+        return any(marker in normalized for marker in failure_markers)
+
     def _normalize_tool_outputs(self, host: str, outputs: dict[str, str]) -> list[ToolFinding]:
         findings: list[ToolFinding] = []
 
@@ -359,7 +384,11 @@ class ASMScannerService:
         }
 
         for tool, raw in outputs.items():
-            lines = [line.strip() for line in raw.splitlines() if line.strip() and not self._is_tool_unavailable_line(line)]
+            lines = [
+                line.strip()
+                for line in raw.splitlines()
+                if line.strip() and not self._is_tool_unavailable_line(line) and not self._is_tool_failure_evidence(line)
+            ]
             if not lines:
                 continue
 

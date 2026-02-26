@@ -119,5 +119,7 @@ def test_scan_does_not_emit_tool_unavailable_as_findings():
     report = response.json()['report']
 
     for exposure in report['top_exposures']:
-        assert 'TOOL_UNAVAILABLE:' not in exposure['title']
-        assert 'TOOL_ERROR:' not in exposure['title']
+        title = exposure['title']
+        assert 'TOOL_UNAVAILABLE:' not in title
+        assert 'TOOL_ERROR:' not in title
+        assert 'could not run' not in title.lower()
