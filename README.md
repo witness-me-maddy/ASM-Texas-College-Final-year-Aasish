@@ -12,6 +12,7 @@ An enterprise-grade ASM platform with:
 - Async-like queued scan jobs: `POST /api/jobs/scan`, `GET /api/jobs`.
 - Scanner-node observability: `GET /api/scanner-nodes`.
 - Report-level detail API: `GET /api/reports/{report_id}`.
+- Enterprise portfolio reporting API: `GET /api/reporting/portfolio` (KPIs, risk bands, BU posture, source-tool trends).
 - Exposure workflow APIs:
   - `POST /api/exposures/{id}/assign`
   - `POST /api/exposures/{id}/ticket`
@@ -26,6 +27,7 @@ An enterprise-grade ASM platform with:
 - `GET /api/assets`
 - `GET /api/reports`
 - `GET /api/reports/{report_id}`
+- `GET /api/reporting/portfolio`
 - `POST /api/scan` (synchronous full scan)
 - `POST /api/jobs/scan` (queued prioritized scan)
 - `GET /api/jobs`

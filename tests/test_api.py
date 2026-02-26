@@ -80,3 +80,17 @@ def test_approving_exception_sets_exposure_to_accepted():
     payload = approve.json()['exposure']
     assert payload['exception_status'] == 'approved'
     assert payload['status'] == 'accepted'
+
+
+def test_reporting_portfolio_endpoint_returns_enterprise_metrics():
+    response = client.get('/api/reporting/portfolio')
+    assert response.status_code == 200
+
+    reporting = response.json()['reporting']
+    assert 'kpis' in reporting
+    assert 'business_units' in reporting
+    assert 'source_tools' in reporting
+
+    kpis = reporting['kpis']
+    for key in ['assets', 'total_exposures', 'open_exposures', 'sla_breaches', 'reports_generated']:
+        assert key in kpis

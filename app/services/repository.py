@@ -207,6 +207,72 @@ class InMemoryRepository:
             mean_epss=round(mean_epss, 4),
         )
 
+
+
+    def reporting_snapshot(self) -> dict:
+        exposures = self.list_exposures()
+        open_exposures = [e for e in exposures if e.status == ExposureStatus.open]
+        accepted_exposures = [e for e in exposures if e.status == ExposureStatus.accepted]
+        mitigated_exposures = [e for e in exposures if e.status == ExposureStatus.mitigated]
+
+        now = datetime.now(timezone.utc)
+        sla_breaches = [e for e in open_exposures if e.sla_due_at and e.sla_due_at < now]
+
+        risk_bands = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+        for exposure in exposures:
+            if exposure.epss_score >= 0.7:
+                risk_bands["Critical"] += 1
+            elif exposure.epss_score >= 0.4:
+                risk_bands["High"] += 1
+            elif exposure.epss_score >= 0.2:
+                risk_bands["Medium"] += 1
+            else:
+                risk_bands["Low"] += 1
+
+        tool_breakdown: dict[str, int] = defaultdict(int)
+        for exposure in exposures:
+            tool_breakdown[exposure.source_tool] += 1
+
+        business_unit_breakdown: dict[str, dict[str, int]] = {}
+        for asset in self.assets.values():
+            rows = asset.exposures
+            if not rows:
+                continue
+            business_unit_breakdown[asset.business_unit] = {
+                "total": len(rows),
+                "open": len([e for e in rows if e.status == ExposureStatus.open]),
+                "critical": len([e for e in rows if e.epss_score >= 0.7]),
+                "high": len([e for e in rows if 0.4 <= e.epss_score < 0.7]),
+            }
+
+        reports = self.list_reports()
+        recent_reports = [
+            {
+                "id": report.id,
+                "target_host": report.target_host,
+                "completed_at": report.completed_at,
+                "exposures_discovered": report.exposures_discovered,
+                "max_epss_score": report.max_epss_score,
+            }
+            for report in reports[:10]
+        ]
+
+        return {
+            "kpis": {
+                "assets": len(self.assets),
+                "total_exposures": len(exposures),
+                "open_exposures": len(open_exposures),
+                "accepted_risk_exposures": len(accepted_exposures),
+                "mitigated_exposures": len(mitigated_exposures),
+                "sla_breaches": len(sla_breaches),
+                "reports_generated": len(reports),
+            },
+            "risk_bands": risk_bands,
+            "business_units": business_unit_breakdown,
+            "source_tools": dict(sorted(tool_breakdown.items(), key=lambda x: x[1], reverse=True)),
+            "recent_reports": recent_reports,
+        }
+
     def group_by_business_unit(self) -> dict[str, int]:
         buckets = defaultdict(int)
         for asset in self.assets.values():

@@ -17,6 +17,14 @@ const monitorRows = document.getElementById('monitorRows');
 const monitorUrlInput = document.getElementById('monitorUrlInput');
 const addMonitorBtn = document.getElementById('addMonitorBtn');
 const automationState = document.getElementById('automationState');
+const kpiAssets = document.getElementById('kpiAssets');
+const kpiExposures = document.getElementById('kpiExposures');
+const kpiOpen = document.getElementById('kpiOpen');
+const kpiSlaBreaches = document.getElementById('kpiSlaBreaches');
+const kpiAccepted = document.getElementById('kpiAccepted');
+const kpiReports = document.getElementById('kpiReports');
+const businessUnitRows = document.getElementById('businessUnitRows');
+const sourceToolRows = document.getElementById('sourceToolRows');
 
 const detailEmpty = document.getElementById('detailEmpty');
 const detailView = document.getElementById('detailView');
@@ -232,12 +240,52 @@ async function addMonitorTarget() {
   await refresh(searchInput.value.trim());
 }
 
+
+function renderPortfolioReporting(reportingPayload) {
+  const reporting = reportingPayload?.reporting;
+  const kpis = reporting?.kpis;
+
+  kpiAssets.textContent = String(kpis?.assets || 0);
+  kpiExposures.textContent = String(kpis?.total_exposures || 0);
+  kpiOpen.textContent = String(kpis?.open_exposures || 0);
+  kpiSlaBreaches.textContent = String(kpis?.sla_breaches || 0);
+  kpiAccepted.textContent = String(kpis?.accepted_risk_exposures || 0);
+  kpiReports.textContent = String(kpis?.reports_generated || 0);
+
+  businessUnitRows.innerHTML = '';
+  const units = Object.entries(reporting?.business_units || {});
+  if (units.length === 0) {
+    businessUnitRows.innerHTML = '<tr><td colspan="5">No business-unit exposure data yet.</td></tr>';
+  } else {
+    units
+      .sort((a, b) => (b[1].open || 0) - (a[1].open || 0))
+      .forEach(([name, values]) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${name}</td><td>${values.total || 0}</td><td>${values.open || 0}</td><td>${values.critical || 0}</td><td>${values.high || 0}</td>`;
+        businessUnitRows.append(tr);
+      });
+  }
+
+  sourceToolRows.innerHTML = '';
+  const tools = Object.entries(reporting?.source_tools || {});
+  if (tools.length === 0) {
+    sourceToolRows.innerHTML = '<tr><td colspan="2">No tool findings yet.</td></tr>';
+  } else {
+    tools.slice(0, 8).forEach(([tool, count]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${tool}</td><td>${count}</td>`;
+      sourceToolRows.append(tr);
+    });
+  }
+}
+
 async function refresh(query = '') {
-  const [summary, reportsData, monitorData, automationData] = await Promise.all([
+  const [summary, reportsData, monitorData, automationData, portfolioData] = await Promise.all([
     safeFetch(`${API_BASE}/api/summary`),
     safeFetch(`${API_BASE}/api/reports`),
     safeFetch(`${API_BASE}/api/monitor-targets`),
     safeFetch(`${API_BASE}/api/automation`),
+    safeFetch(`${API_BASE}/api/reporting/portfolio`),
   ]);
 
   if (!reportsData) {
@@ -269,6 +317,8 @@ async function refresh(query = '') {
     automationState.textContent = a.running ? `running (${a.monitored_target_count} targets)` : 'stopped';
     automationState.className = `badge ${a.running ? 'bg-High' : 'bg-Low'}`;
   }
+
+  renderPortfolioReporting(portfolioData);
 
   if (summary && summary.risk_framework) {
     updatedAt.textContent = `Statistics updated on ${new Date().toLocaleString()} · ${summary.risk_framework}`;

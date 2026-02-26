@@ -74,6 +74,12 @@ def get_summary():
     }
 
 
+
+
+@app.get("/api/reporting/portfolio")
+def reporting_portfolio():
+    return {"reporting": repo.reporting_snapshot()}
+
 @app.get("/api/assets")
 def list_assets():
     return {"assets": repo.list_assets()}

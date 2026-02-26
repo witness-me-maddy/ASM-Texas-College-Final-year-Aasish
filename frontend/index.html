@@ -37,6 +37,38 @@
       </section>
       <div id="scanStatus" class="muted"></div>
 
+
+      <section class="panel" id="portfolioReporting">
+        <div class="row-between">
+          <h3>Enterprise Reporting</h3>
+          <span class="muted">Portfolio KPIs, SLA posture, and business-unit risk</span>
+        </div>
+        <div class="kpi-grid" id="kpiGrid">
+          <article class="kpi-card"><span>Total assets</span><strong id="kpiAssets">0</strong></article>
+          <article class="kpi-card"><span>Total exposures</span><strong id="kpiExposures">0</strong></article>
+          <article class="kpi-card"><span>Open exposures</span><strong id="kpiOpen">0</strong></article>
+          <article class="kpi-card"><span>SLA breaches</span><strong id="kpiSlaBreaches">0</strong></article>
+          <article class="kpi-card"><span>Accepted risk</span><strong id="kpiAccepted">0</strong></article>
+          <article class="kpi-card"><span>Reports generated</span><strong id="kpiReports">0</strong></article>
+        </div>
+        <div class="grid-2 compact-grid">
+          <article class="panel panel-inset">
+            <h4>Risk by business unit</h4>
+            <table>
+              <thead><tr><th>Business Unit</th><th>Total</th><th>Open</th><th>Critical</th><th>High</th></tr></thead>
+              <tbody id="businessUnitRows"></tbody>
+            </table>
+          </article>
+          <article class="panel panel-inset">
+            <h4>Top source tools</h4>
+            <table>
+              <thead><tr><th>Tool</th><th>Findings</th></tr></thead>
+              <tbody id="sourceToolRows"></tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+
       <section class="panel" id="automation">
         <div class="row-between">
           <h3>Continuous ASM Automation</h3>
