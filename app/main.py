@@ -103,6 +103,15 @@ def submit_scan_job(payload: ScanRequest):
     return JobSubmissionResponse(job=job)
 
 
+
+
+@app.get("/api/jobs/{job_id}")
+def get_job(job_id: str):
+    job = repo.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job": job}
+
 @app.get("/api/scanner-nodes")
 def list_scanner_nodes():
     return {"nodes": scanner_service.list_nodes()}

@@ -37,6 +37,14 @@ const listTargets = {
 };
 
 let latestReports = [];
+let selectedReportId = null;
+
+function normalizeWebsiteUrl(rawUrl) {
+  const value = (rawUrl || '').trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+}
 
 function riskBand(score) {
   if (score >= 0.7) return 'Critical';
@@ -126,7 +134,7 @@ function renderReports(reports) {
     const tr = document.createElement('tr');
     tr.className = 'clickable-row';
     tr.innerHTML = `<td>${r.target_host || r.website_url}<div class="muted">subs: ${(r.discovered_subdomains || []).length} • ips: ${(r.discovered_ips || []).length}</div></td><td>${fmtPosition(r.target_position)}</td><td>${(r.open_ports || []).length} ports</td><td>${(r.tools_executed || []).join(', ')}</td><td>${r.exposures_discovered}</td><td>${Number(r.max_epss_score).toFixed(2)}</td><td>${new Date(r.completed_at).toLocaleString()}</td>`;
-    tr.addEventListener('click', () => renderTargetDetails(r.id));
+    tr.addEventListener('click', () => { selectedReportId = r.id; renderTargetDetails(r.id); });
     reportRows.append(tr);
   });
 }
@@ -174,6 +182,7 @@ async function renderTargetDetails(reportId) {
   if (live && live.report) report = live.report;
   if (!report) return;
 
+  selectedReportId = report.id;
   detailEmpty.classList.add('hidden');
   detailView.classList.remove('hidden');
 
@@ -196,21 +205,20 @@ async function runScan(url) {
   const submitted = await safeFetch(`${API_BASE}/api/jobs/scan`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ website_url: url, priority: 2 }),
   });
-  if (!submitted || !submitted.job) return null;
+  if (!submitted || !submitted.job) return { status: 'submission_failed' };
 
   const jobId = submitted.job.id;
-  const maxAttempts = 30;
+  const maxAttempts = 45;
   for (let i = 0; i < maxAttempts; i++) {
-    const jobsResponse = await safeFetch(`${API_BASE}/api/jobs`);
-    const job = (jobsResponse?.jobs || []).find((row) => row.id === jobId);
-    if (job && (job.status === 'completed' || job.status === 'failed')) {
-      if (job.status === 'failed') return null;
-      return { job };
-    }
+    const jobResponse = await safeFetch(`${API_BASE}/api/jobs/${encodeURIComponent(jobId)}`);
+    const job = jobResponse?.job;
+    if (!job) return { status: 'submission_failed', jobId };
+    if (job.status === 'completed') return { status: 'completed', job };
+    if (job.status === 'failed') return { status: 'failed', job };
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 
-  return { job: { status: 'running' } };
+  return { status: 'timeout', jobId };
 }
 
 async function addMonitorTarget() {
@@ -249,7 +257,8 @@ async function refresh(query = '') {
   drawTrend();
   drawDonutFromReports(allReports);
   if (reports.length > 0) {
-    renderTargetDetails(reports[0].id);
+    const preferred = selectedReportId && reports.find((r) => r.id === selectedReportId);
+    renderTargetDetails((preferred || reports[0]).id);
   } else {
     detailView.classList.add('hidden');
     detailEmpty.classList.remove('hidden');
@@ -267,13 +276,32 @@ async function refresh(query = '') {
 }
 
 scanNowBtn.addEventListener('click', async () => {
-  const url = scanUrlInput.value.trim();
-  if (!url) { scanStatus.textContent = 'Please enter website URL.'; return; }
-  scanStatus.textContent = 'Running full scan across all ports and recon tools...';
-  const result = await runScan(url);
-  if (!result) { scanStatus.textContent = 'Scan failed or timed out. Please try again.'; return; }
-  scanStatus.textContent = `Scan completed for ${new URL(url).hostname}. Position, ports, and vulnerabilities updated.`;
-  await refresh(searchInput.value.trim());
+  const normalizedUrl = normalizeWebsiteUrl(scanUrlInput.value);
+  if (!normalizedUrl) { scanStatus.textContent = 'Please enter website URL.'; return; }
+  scanUrlInput.value = normalizedUrl;
+
+  scanStatus.textContent = 'Queued scan job. Waiting for scanner nodes to complete...';
+  const result = await runScan(normalizedUrl);
+
+  if (result.status === 'completed') {
+    const targetHost = result.job.website_url ? new URL(result.job.website_url).hostname : new URL(normalizedUrl).hostname;
+    scanStatus.textContent = `Scan completed for ${targetHost}. Position, ports, and vulnerabilities updated.`;
+    await refresh(searchInput.value.trim());
+    return;
+  }
+
+  if (result.status === 'failed') {
+    scanStatus.textContent = `Scan failed for job ${result.job.id}. Check scanner node/job status.`;
+    return;
+  }
+
+  if (result.status === 'timeout') {
+    scanStatus.textContent = `Scan job ${result.jobId} is still running. Dashboard auto-refresh will show results shortly.`;
+    await refresh(searchInput.value.trim());
+    return;
+  }
+
+  scanStatus.textContent = 'Unable to submit scan job. API unavailable.';
 });
 
 quickScanBtn.addEventListener('click', async () => {

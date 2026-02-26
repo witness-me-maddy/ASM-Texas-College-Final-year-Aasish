@@ -59,3 +59,24 @@ def test_sync_scan_contains_integrated_tools_and_intel_fields():
         assert tool in report['tools_executed']
     assert len(report['discovered_subdomains']) >= 1
     assert len(report['open_ports']) >= 1
+
+
+def test_job_detail_endpoint_returns_submitted_job():
+    submit = client.post('/api/jobs/scan', json={'website_url': 'https://detail.example.com', 'priority': 3})
+    assert submit.status_code == 200
+    job_id = submit.json()['job']['id']
+
+    detail = client.get(f'/api/jobs/{job_id}')
+    assert detail.status_code == 200
+    assert detail.json()['job']['id'] == job_id
+
+
+def test_approving_exception_sets_exposure_to_accepted():
+    exposures = client.get('/api/exposures')
+    exposure_id = exposures.json()['exposures'][0]['id']
+
+    approve = client.post(f'/api/exposures/{exposure_id}/exception-approve', json={'approved_by': 'ciso'})
+    assert approve.status_code == 200
+    payload = approve.json()['exposure']
+    assert payload['exception_status'] == 'approved'
+    assert payload['status'] == 'accepted'

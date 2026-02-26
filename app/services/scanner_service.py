@@ -138,7 +138,7 @@ class ASMScannerService:
             return None
         exposure.exception_status = ExceptionStatus.approved
         exposure.exception_approved_by = payload.approved_by
-        exposure.status = exposure.status.accepted
+        exposure.status = exposure.status.__class__.accepted
         return exposure
 
     def create_ticket(self, exposure_id: str, payload: TicketRequest):
@@ -159,7 +159,11 @@ class ASMScannerService:
 
     def sla_breaches(self):
         now = datetime.now(timezone.utc)
-        return [e for e in self.repository.list_exposures() if e.sla_due_at and e.sla_due_at < now and e.status == e.status.open]
+        return [
+            e
+            for e in self.repository.list_exposures()
+            if e.sla_due_at and e.sla_due_at < now and e.status == e.status.__class__.open
+        ]
 
     def _monitor_loop(self) -> None:
         while not self._stop_event.is_set():
