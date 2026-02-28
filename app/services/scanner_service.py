@@ -489,7 +489,13 @@ class ASMScannerService:
     def _normalize_tool_outputs(self, host: str, outputs: dict[str, str]) -> list[ToolFinding]:
         findings: list[ToolFinding] = []
 
+        # Only promote security-relevant scanner evidence to exposures.
+        vuln_tools = {"Nmap", "Masscan", "Naabu", "Nikto", "Nuclei", "Wafw00f", "httpx"}
+
         for tool, raw in outputs.items():
+            if tool not in vuln_tools:
+                continue
+
             lines = [
                 line.strip()
                 for line in raw.splitlines()
@@ -498,54 +504,55 @@ class ASMScannerService:
             if not lines:
                 continue
 
-            if tool in {"Nmap", "Masscan", "Naabu"}:
-                for idx, line in enumerate(lines[:8], start=1):
-                    if "/tcp" not in line and "/udp" not in line:
-                        continue
-                    port = line.split('/')[0].strip()
-                    findings.append(
-                        ToolFinding(
-                            tool_name=tool,
-                            target=host,
-                            finding_id=f"{tool.lower()}-port-{idx}",
-                            title=f"Open network service exposed on port {port}",
-                            severity_hint="critical" if port in {"22", "3389", "445", "5432", "3306"} else "high",
-                            cve=self._extract_first_cve(line),
-                        )
-                    )
-                continue
-
-            evidence = lines[0]
-            severity = "medium"
-            title = f"{tool} reported finding"
-            if tool == "Nuclei":
-                severity = "critical"
-                title = f"Nuclei template match: {evidence[:90]}"
-            elif tool == "Nikto":
-                severity = "high"
-                title = f"Nikto web finding: {evidence[:90]}"
-            elif tool == "httpx":
-                severity = "medium"
-                title = f"HTTP exposure: {evidence[:90]}"
-            elif tool == "Wafw00f":
-                severity = "medium"
-                title = f"WAF detection result: {evidence[:90]}"
-            elif tool in {"Subfinder", "Assetfinder", "Amass"}:
-                severity = "medium"
-                title = f"Discovered attack-surface entries from {tool}"
-
-            findings.append(
-                ToolFinding(
-                    tool_name=tool,
-                    target=host,
-                    finding_id=f"{tool.lower()}-finding-1",
-                    title=title,
-                    severity_hint=severity,
-                    cve=self._extract_first_cve(raw),
-                )
-            )
+            for idx, line in enumerate(lines[:20], start=1):
+                finding = self._line_to_finding(host, tool, line, idx)
+                if finding is not None:
+                    findings.append(finding)
 
         return findings
+
+    def _line_to_finding(self, host: str, tool: str, line: str, idx: int) -> ToolFinding | None:
+        if tool in {"Nmap", "Masscan", "Naabu"}:
+            if "/tcp" not in line and "/udp" not in line:
+                return None
+            port = line.split('/')[0].strip()
+            title = f"Open network service exposed on port {port}: {line[:90]}"
+            severity = "critical" if port in {"22", "3389", "445", "5432", "3306"} else "high"
+        else:
+            title = line[:120]
+            severity = self._severity_from_evidence(tool, line)
+
+        return ToolFinding(
+            tool_name=tool,
+            target=host,
+            finding_id=f"{tool.lower()}-finding-{idx}",
+            title=title,
+            severity_hint=severity,
+            cve=self._extract_first_cve(line),
+        )
+
+    @staticmethod
+    def _severity_from_evidence(tool: str, line: str) -> str:
+        lowered = line.lower()
+        if tool == "Nuclei":
+            if "critical" in lowered:
+                return "critical"
+            if "high" in lowered:
+                return "high"
+            if "medium" in lowered:
+                return "medium"
+            if "low" in lowered:
+                return "low"
+            return "high"
+        if tool == "Nikto":
+            return "high"
+        if tool == "Wafw00f":
+            return "medium"
+        if tool == "httpx":
+            if "cve-" in lowered or "vulnerab" in lowered:
+                return "medium"
+            return "low"
+        return "medium"
 
     @staticmethod
     def _extract_first_cve(text: str) -> str | None:

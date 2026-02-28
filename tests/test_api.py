@@ -157,7 +157,7 @@ def test_scanner_environment_endpoint_exposes_missing_tools():
     assert {'binary', 'resolved_path', 'available', 'env_var'}.issubset(set(one_tool.keys()))
 
 
-def test_normalization_extracts_cve_from_tool_output_when_present():
+def test_scanner_extracts_cve_from_actual_tool_output_when_present():
     service = ASMScannerService(InMemoryRepository(), ToolIngestionAdapter(EPSSService()), EPSSService())
     findings = service._normalize_tool_outputs(
         'example.com',
@@ -169,14 +169,16 @@ def test_normalization_extracts_cve_from_tool_output_when_present():
     assert findings[0].cve == 'CVE-2023-9999'
 
 
-def test_normalization_does_not_assign_static_cve_when_missing():
+def test_scanner_ignores_non_vulnerability_discovery_tools_for_exposures():
     service = ASMScannerService(InMemoryRepository(), ToolIngestionAdapter(EPSSService()), EPSSService())
     findings = service._normalize_tool_outputs(
         'example.com',
         {
             'Assetfinder': 'api.example.com\nmail.example.com',
+            'Subfinder': 'dev.example.com',
             'Nmap': '80/tcp open http',
         },
     )
-    assert len(findings) == 2
-    assert all(f.cve is None for f in findings)
+    assert len(findings) == 1
+    assert findings[0].tool_name == 'Nmap'
+    assert findings[0].cve is None
