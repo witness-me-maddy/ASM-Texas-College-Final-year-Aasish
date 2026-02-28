@@ -138,6 +138,12 @@ def list_scanner_nodes():
     return {"nodes": scanner_service.list_nodes()}
 
 
+
+
+@app.get("/api/scanner-environment")
+def scanner_environment():
+    return {"environment": scanner_service.scanner_environment_status()}
+
 @app.get("/api/automation")
 def automation_status():
     return {"automation": scanner_service.automation_status()}

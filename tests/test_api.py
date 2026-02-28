@@ -138,3 +138,13 @@ def test_report_tool_runs_endpoint_returns_tool_telemetry():
     assert isinstance(runs, list)
     assert len(runs) >= 1
     assert {'tool_name', 'status', 'duration_ms'}.issubset(set(runs[0].keys()))
+
+
+def test_scanner_environment_endpoint_exposes_missing_tools():
+    response = client.get('/api/scanner-environment')
+    assert response.status_code == 200
+    payload = response.json()['environment']
+    assert 'required_tools' in payload
+    assert 'missing_tools' in payload
+    assert 'health' in payload
+    assert isinstance(payload['required_tools'], dict)

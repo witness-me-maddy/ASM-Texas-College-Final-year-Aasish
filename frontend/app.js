@@ -26,6 +26,9 @@ const kpiReports = document.getElementById('kpiReports');
 const businessUnitRows = document.getElementById('businessUnitRows');
 const sourceToolRows = document.getElementById('sourceToolRows');
 const assetByUrlRows = document.getElementById('assetByUrlRows');
+const scannerEnvRows = document.getElementById('scannerEnvRows');
+const scannerEnvHint = document.getElementById('scannerEnvHint');
+const scannerEnvBadge = document.getElementById('scannerEnvBadge');
 
 const detailEmpty = document.getElementById('detailEmpty');
 const detailView = document.getElementById('detailView');
@@ -251,6 +254,39 @@ async function addMonitorTarget() {
 
 
 
+
+function renderScannerEnvironment(payload) {
+  const env = payload?.environment;
+  const required = env?.required_tools || {};
+  const missing = env?.missing_tools || [];
+
+  scannerEnvRows.innerHTML = '';
+  const entries = Object.entries(required);
+  if (entries.length === 0) {
+    scannerEnvHint.textContent = 'Unable to load scanner environment status.';
+    scannerEnvBadge.textContent = 'unknown';
+    scannerEnvBadge.className = 'badge bg-Medium';
+    scannerEnvRows.innerHTML = '<tr><td colspan="3">No scanner environment data.</td></tr>';
+    return;
+  }
+
+  entries.forEach(([tool, info]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${tool}</td><td>${info.binary}</td><td>${info.available ? 'available' : 'missing'}</td>`;
+    scannerEnvRows.append(tr);
+  });
+
+  if (missing.length === 0) {
+    scannerEnvHint.textContent = 'All scanner binaries are available.';
+    scannerEnvBadge.textContent = 'healthy';
+    scannerEnvBadge.className = 'badge bg-Low';
+  } else {
+    scannerEnvHint.textContent = `Missing tools: ${missing.join(', ')}. Install scanner binaries for full enterprise scan coverage.`;
+    scannerEnvBadge.textContent = 'degraded';
+    scannerEnvBadge.className = 'badge bg-High';
+  }
+}
+
 function renderAssetByUrl(sectionsPayload) {
   assetByUrlRows.innerHTML = '';
   const sections = sectionsPayload?.sections || [];
@@ -306,13 +342,14 @@ function renderPortfolioReporting(reportingPayload) {
 }
 
 async function refresh(query = '') {
-  const [summary, reportsData, monitorData, automationData, portfolioData, assetsByUrlData] = await Promise.all([
+  const [summary, reportsData, monitorData, automationData, portfolioData, assetsByUrlData, scannerEnvData] = await Promise.all([
     safeFetch(`${API_BASE}/api/summary`),
     safeFetch(`${API_BASE}/api/reports`),
     safeFetch(`${API_BASE}/api/monitor-targets`),
     safeFetch(`${API_BASE}/api/automation`),
     safeFetch(`${API_BASE}/api/reporting/portfolio`),
     safeFetch(`${API_BASE}/api/assets/by-url`),
+    safeFetch(`${API_BASE}/api/scanner-environment`),
   ]);
 
   if (!reportsData) {
@@ -347,6 +384,7 @@ async function refresh(query = '') {
 
   renderPortfolioReporting(portfolioData);
   renderAssetByUrl(assetsByUrlData);
+  renderScannerEnvironment(scannerEnvData);
 
   if (summary && summary.risk_framework) {
     updatedAt.textContent = `Statistics updated on ${new Date().toLocaleString()} · ${summary.risk_framework}`;

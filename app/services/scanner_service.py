@@ -118,6 +118,40 @@ class ASMScannerService:
             worker.join(timeout=1)
         self._workers = []
 
+
+    @staticmethod
+    def required_tool_binaries() -> dict[str, str]:
+        return {
+            "Nmap": "nmap",
+            "Masscan": "masscan",
+            "Subfinder": "subfinder",
+            "Assetfinder": "assetfinder",
+            "Nikto": "nikto",
+            "Nuclei": "nuclei",
+            "Amass": "amass",
+            "httpx": "httpx",
+            "Naabu": "naabu",
+            "Wafw00f": "wafw00f",
+        }
+
+    def scanner_environment_status(self) -> dict:
+        tools = self.required_tool_binaries()
+        availability = {
+            tool: {
+                "binary": binary,
+                "available": bool(shutil.which(binary)),
+            }
+            for tool, binary in tools.items()
+        }
+        missing = [tool for tool, info in availability.items() if not info["available"]]
+        return {
+            "required_tools": availability,
+            "missing_tools": missing,
+            "all_tools_available": len(missing) == 0,
+            "health": "healthy" if len(missing) == 0 else "degraded",
+            "install_hint": "Install missing scanner binaries (nmap, masscan, subfinder, assetfinder, nikto, nuclei, amass, httpx, naabu, wafw00f).",
+        }
+
     def list_nodes(self) -> list[ScannerNode]:
         return self.repository.list_nodes()
 

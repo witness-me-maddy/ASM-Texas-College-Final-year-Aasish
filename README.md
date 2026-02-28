@@ -34,6 +34,7 @@ An enterprise-grade ASM platform with:
 - `POST /api/jobs/scan` (queued prioritized scan)
 - `GET /api/jobs`
 - `GET /api/scanner-nodes`
+- `GET /api/scanner-environment`
 - `GET /api/automation`
 - `GET /api/monitor-targets`
 - `POST /api/monitor-targets`

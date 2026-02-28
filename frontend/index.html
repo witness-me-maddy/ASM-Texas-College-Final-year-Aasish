@@ -52,6 +52,19 @@
         <div id="scanStatus" class="muted"></div>
       </section>
 
+
+      <section class="panel" id="scannerEnvironmentPanel">
+        <div class="row-between">
+          <h3>Scanner Environment Health</h3>
+          <span id="scannerEnvBadge" class="badge bg-Low">unknown</span>
+        </div>
+        <p id="scannerEnvHint" class="muted">Checking scanner binary availability...</p>
+        <table>
+          <thead><tr><th>Tool</th><th>Binary</th><th>Status</th></tr></thead>
+          <tbody id="scannerEnvRows"></tbody>
+        </table>
+      </section>
+
       <section class="panel" id="portfolioReporting">
         <div class="row-between">
           <h3>Enterprise Reporting</h3>
