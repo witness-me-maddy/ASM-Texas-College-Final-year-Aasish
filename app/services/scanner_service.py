@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import queue
 import re
 import shutil
