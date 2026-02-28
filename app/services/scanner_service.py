@@ -489,19 +489,6 @@ class ASMScannerService:
     def _normalize_tool_outputs(self, host: str, outputs: dict[str, str]) -> list[ToolFinding]:
         findings: list[ToolFinding] = []
 
-        cve_map = {
-            "Nmap": "CVE-2024-6387",
-            "Masscan": "CVE-2023-44487",
-            "Naabu": "CVE-2023-1389",
-            "Nikto": "CVE-2023-25690",
-            "Nuclei": "CVE-2023-20198",
-            "httpx": "CVE-2022-0778",
-            "Wafw00f": "CVE-2020-5902",
-            "Subfinder": "CVE-2021-41773",
-            "Assetfinder": "CVE-2023-3446",
-            "Amass": "CVE-2023-50387",
-        }
-
         for tool, raw in outputs.items():
             lines = [
                 line.strip()
@@ -523,7 +510,7 @@ class ASMScannerService:
                             finding_id=f"{tool.lower()}-port-{idx}",
                             title=f"Open network service exposed on port {port}",
                             severity_hint="critical" if port in {"22", "3389", "445", "5432", "3306"} else "high",
-                            cve=cve_map.get(tool),
+                            cve=self._extract_first_cve(line),
                         )
                     )
                 continue
@@ -554,11 +541,18 @@ class ASMScannerService:
                     finding_id=f"{tool.lower()}-finding-1",
                     title=title,
                     severity_hint=severity,
-                    cve=cve_map.get(tool),
+                    cve=self._extract_first_cve(raw),
                 )
             )
 
         return findings
+
+    @staticmethod
+    def _extract_first_cve(text: str) -> str | None:
+        match = re.search(r"\bCVE-\d{4}-\d{4,7}\b", text, re.IGNORECASE)
+        if not match:
+            return None
+        return match.group(0).upper()
 
     @staticmethod
     def _simulate_position(host: str) -> GeoPosition:

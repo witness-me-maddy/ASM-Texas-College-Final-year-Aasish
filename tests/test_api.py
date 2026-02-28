@@ -2,6 +2,11 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
+from app.connectors.tool_connectors import ToolIngestionAdapter
+from app.services.epss_service import EPSSService
+from app.services.repository import InMemoryRepository
+from app.services.scanner_service import ASMScannerService
+
 client = TestClient(app)
 
 
@@ -150,3 +155,28 @@ def test_scanner_environment_endpoint_exposes_missing_tools():
     assert isinstance(payload['required_tools'], dict)
     one_tool = next(iter(payload['required_tools'].values()))
     assert {'binary', 'resolved_path', 'available', 'env_var'}.issubset(set(one_tool.keys()))
+
+
+def test_normalization_extracts_cve_from_tool_output_when_present():
+    service = ASMScannerService(InMemoryRepository(), ToolIngestionAdapter(EPSSService()), EPSSService())
+    findings = service._normalize_tool_outputs(
+        'example.com',
+        {
+            'Nuclei': '[critical] SQL injection detected CVE-2023-9999 on https://example.com/login',
+        },
+    )
+    assert len(findings) == 1
+    assert findings[0].cve == 'CVE-2023-9999'
+
+
+def test_normalization_does_not_assign_static_cve_when_missing():
+    service = ASMScannerService(InMemoryRepository(), ToolIngestionAdapter(EPSSService()), EPSSService())
+    findings = service._normalize_tool_outputs(
+        'example.com',
+        {
+            'Assetfinder': 'api.example.com\nmail.example.com',
+            'Nmap': '80/tcp open http',
+        },
+    )
+    assert len(findings) == 2
+    assert all(f.cve is None for f in findings)
