@@ -148,3 +148,5 @@ def test_scanner_environment_endpoint_exposes_missing_tools():
     assert 'missing_tools' in payload
     assert 'health' in payload
     assert isinstance(payload['required_tools'], dict)
+    one_tool = next(iter(payload['required_tools'].values()))
+    assert {'binary', 'resolved_path', 'available', 'env_var'}.issubset(set(one_tool.keys()))

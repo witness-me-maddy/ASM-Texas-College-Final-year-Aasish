@@ -59,3 +59,22 @@ source .venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+
+## Tool binary override (use system-installed tools explicitly)
+If binaries are installed in non-standard locations, set environment variables before starting the app:
+
+```bash
+export ASM_TOOL_NMAP_BIN=/usr/bin/nmap
+export ASM_TOOL_MASSCAN_BIN=/usr/bin/masscan
+export ASM_TOOL_SUBFINDER_BIN=/usr/bin/subfinder
+export ASM_TOOL_ASSETFINDER_BIN=/usr/bin/assetfinder
+export ASM_TOOL_NIKTO_BIN=/usr/bin/nikto
+export ASM_TOOL_NUCLEI_BIN=/usr/bin/nuclei
+export ASM_TOOL_AMASS_BIN=/usr/bin/amass
+export ASM_TOOL_HTTPX_BIN=/usr/bin/httpx
+export ASM_TOOL_NAABU_BIN=/usr/bin/naabu
+export ASM_TOOL_WAFW00F_BIN=/usr/bin/wafw00f
+```
+
+You can verify runtime detection with `GET /api/scanner-environment`.

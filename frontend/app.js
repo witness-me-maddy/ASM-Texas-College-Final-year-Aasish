@@ -266,13 +266,13 @@ function renderScannerEnvironment(payload) {
     scannerEnvHint.textContent = 'Unable to load scanner environment status.';
     scannerEnvBadge.textContent = 'unknown';
     scannerEnvBadge.className = 'badge bg-Medium';
-    scannerEnvRows.innerHTML = '<tr><td colspan="3">No scanner environment data.</td></tr>';
+    scannerEnvRows.innerHTML = '<tr><td colspan="4">No scanner environment data.</td></tr>';
     return;
   }
 
   entries.forEach(([tool, info]) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${tool}</td><td>${info.binary}</td><td>${info.available ? 'available' : 'missing'}</td>`;
+    tr.innerHTML = `<td>${tool}<div class="muted">${info.env_var}</div></td><td>${info.binary}</td><td>${info.resolved_path || '-'}</td><td>${info.available ? 'available' : 'missing'}</td>`;
     scannerEnvRows.append(tr);
   });
 

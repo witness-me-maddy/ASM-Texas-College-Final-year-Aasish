@@ -134,22 +134,45 @@ class ASMScannerService:
             "Wafw00f": "wafw00f",
         }
 
+    @staticmethod
+    def _tool_env_key(tool_name: str) -> str:
+        normalized = re.sub(r"[^A-Za-z0-9]", "_", tool_name).upper()
+        return f"ASM_TOOL_{normalized}_BIN"
+
+    @staticmethod
+    def _resolve_binary(binary: str) -> str | None:
+        if os.path.isabs(binary):
+            if os.path.exists(binary) and os.access(binary, os.X_OK):
+                return binary
+            return None
+        return shutil.which(binary)
+
+    def _resolve_tool_binary(self, tool_name: str, default_binary: str) -> tuple[str, str | None, str]:
+        env_key = self._tool_env_key(tool_name)
+        configured = os.getenv(env_key)
+        candidate = configured.strip() if configured else default_binary
+        resolved = self._resolve_binary(candidate)
+        return candidate, resolved, env_key
+
     def scanner_environment_status(self) -> dict:
         tools = self.required_tool_binaries()
-        availability = {
-            tool: {
-                "binary": binary,
-                "available": bool(shutil.which(binary)),
+        availability: dict[str, dict] = {}
+        for tool, default_binary in tools.items():
+            candidate, resolved, env_key = self._resolve_tool_binary(tool, default_binary)
+            availability[tool] = {
+                "binary": candidate,
+                "resolved_path": resolved,
+                "available": bool(resolved),
+                "env_var": env_key,
             }
-            for tool, binary in tools.items()
-        }
+
         missing = [tool for tool, info in availability.items() if not info["available"]]
         return {
             "required_tools": availability,
             "missing_tools": missing,
             "all_tools_available": len(missing) == 0,
             "health": "healthy" if len(missing) == 0 else "degraded",
-            "install_hint": "Install missing scanner binaries (nmap, masscan, subfinder, assetfinder, nikto, nuclei, amass, httpx, naabu, wafw00f).",
+            "install_hint": "Install missing scanner binaries (nmap, masscan, subfinder, assetfinder, nikto, nuclei, amass, httpx, naabu, wafw00f) or set ASM_TOOL_<TOOL>_BIN env vars.",
         }
 
     def list_nodes(self) -> list[ScannerNode]:
@@ -375,7 +398,9 @@ class ASMScannerService:
         outputs: dict[str, str] = {}
         runs: list[ToolRun] = []
         for tool, cmd in commands.items():
-            output, run = self._run_tool_or_fallback(tool, cmd, host)
+            candidate, resolved, _ = self._resolve_tool_binary(tool, cmd[0])
+            effective_cmd = [resolved or candidate] + cmd[1:]
+            output, run = self._run_tool_or_fallback(tool, effective_cmd, host)
             outputs[tool] = output
             runs.append(run)
         return outputs, runs
@@ -399,7 +424,7 @@ class ASMScannerService:
                 status=ToolRunStatus.unavailable,
                 duration_ms=int((time.time() - started) * 1000),
                 return_code=None,
-                message=f"binary {binary} not found",
+                message=f"binary {binary} not found in runtime environment",
                 recorded_at=datetime.now(timezone.utc),
             )
             return f"TOOL_UNAVAILABLE:{tool}:{binary}", run
