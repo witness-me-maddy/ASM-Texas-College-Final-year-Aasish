@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Enterprise ASM Console</title>
+  <link rel="stylesheet" href="/frontend/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-block">
+        <div class="logo">🛡️ <span>Aasish ASM</span></div>
+        <p class="subtitle">Enterprise Attack Surface Management</p>
+      </div>
+      <nav class="menu">
+        <a class="active" href="#">Executive Dashboard</a>
+        <a href="#scanner">Scan Operations</a>
+        <a href="#portfolioReporting">Portfolio Reporting</a>
+        <a href="#assetByUrl">URL Asset Registry</a>
+        <a href="#reports">Scan Reports</a>
+        <a href="#targetDetails">Target Intelligence</a>
+      </nav>
+      <div class="profile">
+        <span class="muted">Signed in as</span>
+        <strong>admin</strong>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>Enterprise Attack Surface Dashboard</h1>
+          <p class="muted">Operational visibility for scan execution, exposure posture, and ownership mapping.</p>
+        </div>
+        <div class="top-right">
+          <button id="quickScanBtn" class="quick-btn">⚡ Quick scan</button>
+          <span id="updatedAt" class="timestamp">Statistics updated on --</span>
+        </div>
+      </header>
+
+      <section class="hero-card" id="scanner">
+        <div class="hero-head row-between">
+          <h2>Scan Command Center</h2>
+          <span id="automationState" class="badge bg-Low">unknown</span>
+        </div>
+        <div class="scan-strip scan-strip-main">
+          <input id="scanUrlInput" type="url" placeholder="Enter website URL (e.g. https://example.com)" />
+          <button id="scanNowBtn">Run full scan</button>
+          <input id="searchInput" type="search" placeholder="Search assets/reports..." />
+        </div>
+        <div id="scanStatus" class="muted"></div>
+      </section>
+
+
+      <section class="panel" id="scannerEnvironmentPanel">
+        <div class="row-between">
+          <h3>Scanner Environment Health</h3>
+          <span id="scannerEnvBadge" class="badge bg-Low">unknown</span>
+        </div>
+        <p id="scannerEnvHint" class="muted">Checking scanner binary availability...</p>
+        <table>
+          <thead><tr><th>Tool</th><th>Configured Binary</th><th>Resolved Path</th><th>Status</th></tr></thead>
+          <tbody id="scannerEnvRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="portfolioReporting">
+        <div class="row-between">
+          <h3>Enterprise Reporting</h3>
+          <span class="muted">Portfolio KPIs, SLA posture, and business-unit risk</span>
+        </div>
+        <div class="kpi-grid" id="kpiGrid">
+          <article class="kpi-card"><span>Total assets</span><strong id="kpiAssets">0</strong></article>
+          <article class="kpi-card"><span>Total exposures</span><strong id="kpiExposures">0</strong></article>
+          <article class="kpi-card"><span>Open exposures</span><strong id="kpiOpen">0</strong></article>
+          <article class="kpi-card"><span>SLA breaches</span><strong id="kpiSlaBreaches">0</strong></article>
+          <article class="kpi-card"><span>Accepted risk</span><strong id="kpiAccepted">0</strong></article>
+          <article class="kpi-card"><span>Reports generated</span><strong id="kpiReports">0</strong></article>
+        </div>
+        <div class="grid-2 compact-grid">
+          <article class="panel panel-inset">
+            <h4>Risk by business unit</h4>
+            <table>
+              <thead><tr><th>Business Unit</th><th>Total</th><th>Open</th><th>Critical</th><th>High</th></tr></thead>
+              <tbody id="businessUnitRows"></tbody>
+            </table>
+          </article>
+          <article class="panel panel-inset">
+            <h4>Top source tools</h4>
+            <table>
+              <thead><tr><th>Tool</th><th>Findings</th></tr></thead>
+              <tbody id="sourceToolRows"></tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+
+      <section class="grid-2">
+        <article class="panel" id="automation">
+          <div class="row-between">
+            <h3>Continuous ASM Automation</h3>
+            <span class="muted">Monitor targets and scheduling</span>
+          </div>
+          <div class="scan-strip">
+            <input id="monitorUrlInput" type="url" placeholder="Target URL for continuous monitoring" />
+            <button id="addMonitorBtn">Add monitor target</button>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Target</th><th>Interval(s)</th><th>Last Scan</th><th>Status</th></tr>
+            </thead>
+            <tbody id="monitorRows"></tbody>
+          </table>
+        </article>
+
+        <article class="panel">
+          <h3>Vulnerability distribution</h3>
+          <p class="muted">By EPSS risk band</p>
+          <div class="donut-wrap">
+            <canvas id="donutCanvas" width="320" height="260"></canvas>
+            <div class="donut-center"><span id="totalVulns">0</span><small>vulnerabilities</small></div>
+          </div>
+          <div class="legend" id="riskLegend"></div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <h3>Asset trends</h3>
+        <p class="muted">EPSS-aware asset growth over recent scans</p>
+        <canvas id="trendCanvas" width="700" height="260"></canvas>
+        <div class="legend" id="assetLegend"></div>
+      </section>
+
+      <section class="panel" id="assetByUrl">
+        <div class="row-between">
+          <h3>URL ↔ Asset Registry</h3>
+          <span class="muted">Each scanned URL mapped to its asset and latest report</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>URL/Host</th><th>Asset ID</th><th>Owner</th><th>Business Unit</th><th>Open/Total Exposures</th><th>Latest Report</th><th>Last Scan</th></tr>
+          </thead>
+          <tbody id="assetByUrlRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="reports">
+        <div class="row-between">
+          <h3>Scan history</h3>
+          <span class="muted">Click a target row to open complete intelligence</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Target</th><th>Position</th><th>Open Ports</th><th>Tools</th><th>Vulnerabilities</th><th>Max EPSS</th><th>Created At</th></tr>
+          </thead>
+          <tbody id="reportRows"></tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="targetDetails">
+        <h3>Target Intelligence (Deep Report)</h3>
+        <div id="detailEmpty" class="muted">Select a target in scan history to view everything discovered.</div>
+        <div id="detailView" class="detail-grid hidden">
+          <article class="detail-card"><h4>Target</h4><p id="dTarget"></p></article>
+          <article class="detail-card"><h4>WAF</h4><p id="dWaf"></p></article>
+          <article class="detail-card"><h4>Port Coverage</h4><p id="dPortRange"></p></article>
+          <article class="detail-card"><h4>Top EPSS</h4><p id="dTopEpss"></p></article>
+          <article class="detail-card wide"><h4>Tools Executed</h4><p id="dTools"></p><p id="dToolHealth" class="muted"></p></article>
+          <article class="detail-card wide"><h4>Open Ports</h4><p id="dPorts"></p></article>
+          <article class="detail-card"><h4>Subdomains</h4><ul id="dSubs"></ul></article>
+          <article class="detail-card"><h4>IPs</h4><ul id="dIps"></ul></article>
+          <article class="detail-card"><h4>Technologies</h4><ul id="dTech"></ul></article>
+          <article class="detail-card"><h4>URLs</h4><ul id="dUrls"></ul></article>
+          <article class="detail-card"><h4>Emails</h4><ul id="dEmails"></ul></article>
+          <article class="detail-card"><h4>Cloud Assets</h4><ul id="dCloud"></ul></article>
+        </div>
+      </section>
+
+      <section class="panel" id="findings">
+        <h3>Top EPSS Exposures</h3>
+        <ul id="topFindings" class="findings"></ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="/frontend/app.js"></script>
+</body>
+</html>
